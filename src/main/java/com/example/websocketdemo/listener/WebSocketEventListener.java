@@ -1,4 +1,4 @@
-package com.example.websocketdemo.controller;
+package com.example.websocketdemo.listener;
 
 import com.example.websocketdemo.service.ChatService;
 import org.slf4j.Logger;

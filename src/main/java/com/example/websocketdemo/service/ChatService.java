@@ -236,7 +236,12 @@ public class ChatService {
     }
 
     public void setUserOnline(String username) {
-        userRepository.setOnline(username);
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new RuntimeException("User not found: " + username));
+        user.setIsOnline(true);
+        user.setLastSeen(LocalDateTime.now());
+
+        userRepository.save(user);
     }
 
     public void setUserOffline(String username) {

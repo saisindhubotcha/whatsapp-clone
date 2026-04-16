@@ -12,10 +12,9 @@ import org.springframework.stereotype.Controller;
 @Controller
 public class WebSocketMessageController {
 
-    @Autowired
     private ChatService chatService;
 
-    @MessageMapping("/chat.sendMessage")
+    @MessageMapping("/chat/send")
     @SendTo("/topic/public")
     public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
         // Store the message in database using the service
@@ -28,13 +27,9 @@ public class WebSocketMessageController {
         return chatMessage;
     }
 
-    @MessageMapping("/chat.addUser")
+    @MessageMapping("/user/add")
     @SendTo("/topic/public")
     public ChatMessage addUser(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
-        // Add username in web socket session
-        headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
-        
-        // Set user as online
         try {
             chatService.setUserOnline(chatMessage.getSender());
         } catch (Exception e) {

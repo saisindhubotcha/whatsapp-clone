@@ -2,7 +2,7 @@
 <html>
   <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-      <title>Spring Boot WebSocket Chat Application | CalliCoder</title>
+      <title>Advanced Chat Application | Spring Boot WebSocket</title>
       <link rel="stylesheet" href="/css/main.css" />
   </head>
   <body>
@@ -10,12 +10,13 @@
       <h2>Sorry! Your browser doesn't support Javascript</h2>
     </noscript>
 
+    <!-- Login Page -->
     <div id="username-page">
         <div class="username-page-container">
-            <h1 class="title">Type your username</h1>
+            <h1 class="title">Welcome to Chat</h1>
             <form id="usernameForm" name="usernameForm">
                 <div class="form-group">
-                    <input type="text" id="name" placeholder="Username" autocomplete="off" class="form-control" />
+                    <input type="text" id="name" placeholder="Enter your username" autocomplete="off" class="form-control" />
                 </div>
                 <div class="form-group">
                     <button type="submit" class="accent username-submit">Start Chatting</button>
@@ -24,23 +25,93 @@
         </div>
     </div>
 
+    <!-- Main Chat Application -->
     <div id="chat-page" class="hidden">
-        <div class="chat-container">
-            <div class="chat-header">
-                <h2>Spring WebSocket Chat Demo</h2>
-            </div>
-            <div class="connecting">
-                Connecting...
-            </div>
-            <ul id="messageArea">
-
-            </ul>
-            <form id="messageForm" name="messageForm" nameForm="messageForm">
-                <div class="form-group">
-                    <div class="input-group clearfix">
-                        <input type="text" id="message" placeholder="Type a message..." autocomplete="off" class="form-control"/>
-                        <button type="submit" class="primary">Send</button>
+        <div class="chat-app">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="user-profile">
+                        <div class="user-avatar" id="currentUserAvatar"></div>
+                        <div class="user-info">
+                            <div class="username" id="currentUsername"></div>
+                            <div class="user-status" id="currentUserStatus">Online</div>
+                        </div>
                     </div>
+                    <button class="btn-create-chat" id="createChatBtn">+ New Chat</button>
+                </div>
+                
+                <div class="sidebar-content">
+                    <div class="chat-list-header">
+                        <h3>Chats</h3>
+                        <span class="chat-count" id="chatCount">0</span>
+                    </div>
+                    <div class="chat-list" id="chatList">
+                        <!-- Chat items will be dynamically added here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Chat Area -->
+            <div class="main-chat">
+                <div class="chat-header" id="chatHeader">
+                    <div class="chat-info">
+                        <h2 id="currentChatName">Select a chat</h2>
+                        <div class="chat-participants" id="chatParticipants"></div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="btn-icon" id="markReadBtn" title="Mark as read">read</button>
+                        <button class="btn-icon" id="leaveChatBtn" title="Leave chat">leave</button>
+                    </div>
+                </div>
+                
+                <div class="connecting" id="connectingStatus">
+                    Connecting...
+                </div>
+                
+                <div class="messages-container">
+                    <ul id="messageArea" class="message-list">
+                        <!-- Messages will be dynamically added here -->
+                    </ul>
+                </div>
+                
+                <div class="message-input-container" id="messageInputContainer">
+                    <form id="messageForm" name="messageForm">
+                        <div class="input-group">
+                            <input type="text" id="message" placeholder="Type a message..." autocomplete="off" class="form-control"/>
+                            <button type="submit" class="btn-send">Send</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Chat Modal -->
+    <div id="createChatModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Chat</h3>
+                <button class="close-btn" id="closeModalBtn">&times;</button>
+            </div>
+            <form id="createChatForm">
+                <div class="form-group">
+                    <label for="chatName">Chat Name</label>
+                    <input type="text" id="chatName" placeholder="Enter chat name" required>
+                </div>
+                <div class="form-group">
+                    <label for="participants">Participants (comma-separated usernames)</label>
+                    <input type="text" id="participants" placeholder="user1, user2, user3">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="isGroupChat">
+                        Group Chat
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" id="cancelCreateBtn">Cancel</button>
+                    <button type="submit" class="btn-primary">Create Chat</button>
                 </div>
             </form>
         </div>
