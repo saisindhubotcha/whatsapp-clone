@@ -9,6 +9,7 @@ import lombok.Builder;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "chats")
@@ -35,9 +36,11 @@ public class Chat {
     private LocalDateTime lastMessageAt;
     
     @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<ChatParticipant> participants;
     
     @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
     private List<Message> messages;
     
     @Column(name = "is_group_chat", nullable = false)

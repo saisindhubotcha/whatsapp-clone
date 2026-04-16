@@ -31,6 +31,16 @@ public class ChatRestController {
         }
     }
 
+    @PostMapping("/users/{username}/login")
+    public ResponseEntity<Map<String, Object>> loginUser(@PathVariable String username) {
+        try {
+            Map<String, Object> result = chatService.loginUser(username);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/chats")
     public ResponseEntity<Map<String, Object>> createChat(@RequestBody Map<String, Object> request) {
         try {

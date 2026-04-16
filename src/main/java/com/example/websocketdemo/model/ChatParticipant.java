@@ -8,6 +8,7 @@ import lombok.Builder;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "chat_participants")
@@ -23,10 +24,12 @@ public class ChatParticipant {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "chat_id", nullable = false)
+    @JsonIgnore
     private Chat chat;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_username", nullable = false)
+    @JsonIgnore
     private User user;
     
     @Column(name = "joined_at", nullable = false)

@@ -46,8 +46,35 @@
                         <h3>Chats</h3>
                         <span class="chat-count" id="chatCount">0</span>
                     </div>
+                    
+                    <!-- Create Chat Box (shown when no chats exist) -->
+                    <div id="createChatBox" class="create-chat-box hidden">
+                        <div class="create-chat-content">
+                            <h4>Welcome! Create your first chat</h4>
+                            <form id="quickCreateChatForm">
+                                <div class="form-group">
+                                    <label for="quickChatName">Chat Name</label>
+                                    <input type="text" id="quickChatName" placeholder="Enter chat name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="quickParticipants">Add Participants</label>
+                                    <input type="text" id="quickParticipants" placeholder="Enter usernames separated by commas">
+                                    <small class="form-help">Add other users by their usernames (e.g., user1, user2, user3)</small>
+                                </div>
+                                <div class="participant-preview" id="participantPreview"></div>
+                                <button type="submit" class="btn-primary">Create Chat</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Chat List (shown when chats exist) -->
                     <div class="chat-list" id="chatList">
                         <!-- Chat items will be dynamically added here -->
+                    </div>
+                    
+                    <!-- Empty State Message -->
+                    <div id="emptyChatMessage" class="empty-chat-message hidden">
+                        <p>No chats yet. Click "New Chat" to create your first chat!</p>
                     </div>
                 </div>
             </div>

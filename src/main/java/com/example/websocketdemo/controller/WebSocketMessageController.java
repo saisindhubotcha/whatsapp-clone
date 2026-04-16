@@ -12,19 +12,24 @@ import org.springframework.stereotype.Controller;
 @Controller
 public class WebSocketMessageController {
 
+    @Autowired
     private ChatService chatService;
 
     @MessageMapping("/chat/send")
-    @SendTo("/topic/public")
-    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
+    public void sendMessage(@Payload ChatMessage chatMessage) {
         // Store the message in database using the service
         try {
-            chatService.sendMessage(1L, chatMessage.getSender(), chatMessage.getContent());
+            Long chatId = chatMessage.getChatId();
+            if (chatId != null) {
+                chatService.sendMessage(chatId, chatMessage.getSender(), chatMessage.getContent());
+            } else {
+                System.err.println("Chat ID is null in message: " + chatMessage);
+            }
         } catch (Exception e) {
-            // Log error but still broadcast the message
+            // Log error
             System.err.println("Error storing message: " + e.getMessage());
         }
-        return chatMessage;
+        // Return void - ChatService will handle broadcasting to chat-specific topic
     }
 
     @MessageMapping("/user/add")

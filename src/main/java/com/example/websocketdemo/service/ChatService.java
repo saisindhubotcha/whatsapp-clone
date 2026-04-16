@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,43 +59,99 @@ public class ChatService {
         );
     }
 
+    public Map<String, Object> loginUser(String username) {
+        User user = userRepository.findById(username).orElse(null);
+        boolean isNewUser = false;
+        
+        if (user == null) {
+            // Create new user if not found
+            isNewUser = true;
+            user = User.builder()
+                    .username(username)
+                    .sessionId(UUID.randomUUID().toString())
+                    .createdAt(LocalDateTime.now())
+                    .lastSeen(LocalDateTime.now())
+                    .isOnline(true)
+                    .build();
+            
+            userRepository.save(user);
+        } else {
+            // Update existing user
+            user.setLastSeen(LocalDateTime.now());
+            user.setIsOnline(true);
+            userRepository.save(user);
+        }
+
+        return Map.of(
+            "success", true,
+            "user", user,
+            "isNewUser", isNewUser,
+            "message", isNewUser ? "User created and logged in successfully" : "User logged in successfully"
+        );
+    }
+
     public Map<String, Object> createChat(String chatName, String createdBy, List<String> participantUsernames) {
         if (!userRepository.existsById(createdBy)) {
             throw new IllegalArgumentException("Creator not found");
+        }
+
+        // Validate and filter participants
+        List<String> validParticipants = new ArrayList<>();
+        List<String> missingParticipants = new ArrayList<>();
+        
+        // Always include creator
+        validParticipants.add(createdBy);
+        
+        // Validate other participants
+        for (String username : participantUsernames) {
+            if (!username.equals(createdBy)) {
+                if (userRepository.existsById(username)) {
+                    validParticipants.add(username);
+                } else {
+                    missingParticipants.add(username);
+                }
+            }
+        }
+        
+        // Ensure minimum 2 participants (creator + at least 1 other)
+        if (validParticipants.size() < 2) {
+            throw new IllegalArgumentException("Chat must have at least 2 participants including yourself. " +
+                "Please add at least one valid participant.");
         }
 
         Chat chat = Chat.builder()
                 .name(chatName)
                 .createdBy(createdBy)
                 .createdAt(LocalDateTime.now())
-                .isGroupChat(participantUsernames.size() > 1)
+                .isGroupChat(validParticipants.size() > 2) // Group chat if more than 2 people
                 .build();
         
         chat = chatRepository.save(chat);
 
-        // Add creator as participant
-        participantRepository.save(ChatParticipant.builder()
-                .chat(chat)
-                .user(userRepository.findById(createdBy).get())
-                .joinedAt(LocalDateTime.now())
-                .isAdmin(true)
-                .build());
+        // Add all valid participants
+        for (String username : validParticipants) {
+            boolean isAdmin = username.equals(createdBy);
+            participantRepository.save(ChatParticipant.builder()
+                    .chat(chat)
+                    .user(userRepository.findById(username).get())
+                    .joinedAt(LocalDateTime.now())
+                    .isAdmin(isAdmin)
+                    .build());
+        }
 
-        // Add other participants
-        for (String username : participantUsernames) {
-            if (!username.equals(createdBy) && userRepository.existsById(username)) {
-                participantRepository.save(ChatParticipant.builder()
-                        .chat(chat)
-                        .user(userRepository.findById(username).get())
-                        .joinedAt(LocalDateTime.now())
-                        .build());
-            }
+        String message = "Chat created successfully";
+        if (!missingParticipants.isEmpty()) {
+            message += ". Note: " + String.join(", ", missingParticipants) + 
+                       " not found and were not added to the chat.";
         }
 
         return Map.of(
             "success", true,
             "chat", chat,
-            "message", "Chat created successfully"
+            "chatId", chat.getId(),
+            "message", message,
+            "addedParticipants", validParticipants,
+            "missingParticipants", missingParticipants
         );
     }
 
