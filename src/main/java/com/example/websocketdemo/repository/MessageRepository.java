@@ -39,4 +39,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     
     @Query("SELECT COUNT(m) FROM Message m WHERE m.chat.id = :chatId AND m.senderUsername != :username AND m.readAt IS NULL")
     Long countUnreadMessages(@Param("chatId") Long chatId, @Param("username") String username);
+
+    List<Message> findByChatIdOrderByCreatedAtDesc(Long chatId, Pageable pageable);
+    
+    Optional<Message> findByMessageId(String messageId);
 }

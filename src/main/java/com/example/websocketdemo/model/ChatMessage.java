@@ -9,6 +9,7 @@ public class ChatMessage {
     private String sender;
     private Long chatId;
     private LocalDateTime timestamp;
+    private String messageId;
 
     public enum MessageType {
         CHAT,
@@ -54,5 +55,13 @@ public class ChatMessage {
 
     public void setTimestamp(LocalDateTime timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
     }
 }

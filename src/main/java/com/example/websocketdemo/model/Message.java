@@ -52,6 +52,9 @@ public class Message {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
     
+    @Column(name = "message_id", unique = true)
+    private String messageId;
+    
     public enum MessageType {
         CHAT,
         JOIN,
