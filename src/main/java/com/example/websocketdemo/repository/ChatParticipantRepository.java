@@ -20,13 +20,13 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
     
     List<ChatParticipant> findByUserUsernameAndLeftAtIsNull(String username);
     
-    @Query("SELECT cp FROM ChatParticipant cp WHERE cp.chat.id = :chatId AND cp.leftAt IS NULL ORDER BY cp.joinedAt")
+    @Query("SELECT cp FROM ChatParticipant cp WHERE cp.chatId = :chatId AND cp.leftAt IS NULL ORDER BY cp.joinedAt")
     List<ChatParticipant> findActiveParticipantsByChatId(@Param("chatId") Long chatId);
     
     @Modifying
-    @Query("UPDATE ChatParticipant cp SET cp.leftAt = :leftAt WHERE cp.chat.id = :chatId AND cp.user.username = :username")
+    @Query("UPDATE ChatParticipant cp SET cp.leftAt = :leftAt WHERE cp.chatId = :chatId AND cp.userUsername = :username")
     void leaveChat(@Param("chatId") Long chatId, @Param("username") String username, @Param("leftAt") LocalDateTime leftAt);
     
-    @Query("SELECT COUNT(cp) FROM ChatParticipant cp WHERE cp.chat.id = :chatId AND cp.leftAt IS NULL")
+    @Query("SELECT COUNT(cp) FROM ChatParticipant cp WHERE cp.chatId = :chatId AND cp.leftAt IS NULL")
     Long countActiveParticipants(@Param("chatId") Long chatId);
 }

@@ -34,8 +34,4 @@ public class User {
     
     @Column(name = "is_online", nullable = false)
     private Boolean isOnline = false;
-    
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private List<ChatParticipant> chatParticipants;
 }

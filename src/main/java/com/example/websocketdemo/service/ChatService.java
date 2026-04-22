@@ -4,20 +4,17 @@ import com.example.websocketdemo.model.*;
 import com.example.websocketdemo.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
 public class ChatService {
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private ChatRepository chatRepository;
@@ -26,75 +23,23 @@ public class ChatService {
     private ChatParticipantRepository participantRepository;
 
     @Autowired
-    private MessageRepository messageRepository;
+    private UserService userService;
 
     @Autowired
-    private SimpMessageSendingOperations messagingTemplate;
+    private MessageService messageService;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private CacheService cacheService;
 
-    private static final int CACHED_MESSAGE_SIZE = 5;
+    @Autowired
+    private WebSocketService webSocketService;
 
-    // ================= REDIS KEY =================
+    private static final int PAGE_SIZE = 20;
 
-    private String chatKey(Long chatId) {
-        return "chat:" + chatId + ":messages";
-    }
-
-    // ================= USERS =================
-
-    public Map<String, Object> registerUser(String username) {
-        if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be empty");
-        }
-
-        if (userRepository.existsById(username)) {
-            throw new IllegalArgumentException("Username already taken");
-        }
-
-        User user = User.builder()
-                .username(username)
-                .sessionId(UUID.randomUUID().toString())
-                .createdAt(LocalDateTime.now())
-                .lastSeen(LocalDateTime.now())
-                .isOnline(true)
-                .build();
-
-        userRepository.save(user);
-
-        return Map.of("success", true, "user", user);
-    }
-
-    public Map<String, Object> loginUser(String username) {
-
-        User user = userRepository.findById(username).orElse(null);
-        boolean isNew = false;
-
-        if (user == null) {
-            isNew = true;
-            user = User.builder()
-                    .username(username)
-                    .sessionId(UUID.randomUUID().toString())
-                    .createdAt(LocalDateTime.now())
-                    .lastSeen(LocalDateTime.now())
-                    .isOnline(true)
-                    .build();
-        } else {
-            user.setLastSeen(LocalDateTime.now());
-            user.setIsOnline(true);
-        }
-
-        userRepository.save(user);
-
-        return Map.of("success", true, "user", user, "isNewUser", isNew);
-    }
-
-    // ================= CHAT =================
+    // ================= CHAT MANAGEMENT =================
 
     public Map<String, Object> createChat(String chatName, String createdBy, List<String> participants) {
-
-        if (!userRepository.existsById(createdBy)) {
+        if (!userService.userExists(createdBy)) {
             throw new IllegalArgumentException("Creator not found");
         }
 
@@ -102,7 +47,7 @@ public class ChatService {
         valid.add(createdBy);
 
         for (String u : participants) {
-            if (!u.equals(createdBy) && userRepository.existsById(u)) {
+            if (!u.equals(createdBy) && userService.userExists(u)) {
                 valid.add(u);
             }
         }
@@ -118,8 +63,8 @@ public class ChatService {
 
         for (String u : valid) {
             participantRepository.save(ChatParticipant.builder()
-                    .chat(chat)
-                    .user(userRepository.findById(u).get())
+                    .chatId(chat.getId())
+                    .userUsername(u)
                     .joinedAt(LocalDateTime.now())
                     .isAdmin(u.equals(createdBy))
                     .build());
@@ -128,11 +73,10 @@ public class ChatService {
         return Map.of("success", true, "chatId", chat.getId());
     }
 
-    // ================= MESSAGE WRITE =================
+    // ================= MESSAGE OPERATIONS =================
 
     public Map<String, Object> sendMessage(Long chatId, String sender, String content, String messageId) {
-
-        if (!userRepository.existsById(sender)) {
+        if (!userService.userExists(sender)) {
             throw new IllegalArgumentException("User not found");
         }
 
@@ -143,168 +87,150 @@ public class ChatService {
             throw new IllegalArgumentException("User not in chat");
         }
 
-        if (messageId == null) {
-            messageId = generateMessageId(chatId, sender, content);
+        Map<String, Object> result = messageService.sendMessage(chatId, sender, content, messageId);
+        
+        if ((Boolean) result.get("success") && !result.containsKey("duplicate")) {
+            Message message = (Message) result.get("message");
+            
+            chat.setLastMessageAt(message.getCreatedAt());
+            chat.setLastMessageId(message.getMessageId());
+            chatRepository.save(chat);
+
+            cacheService.refreshCacheWithRecentMessagesSync(chatId, messageService.getRecentMessages(chatId, 20));
+            webSocketService.broadcastMessageToChat(chatId, message);
         }
 
-        Optional<Message> existing = messageRepository.findByMessageId(messageId);
-        if (existing.isPresent()) {
-            return Map.of("success", true, "duplicate", true);
+        return result;
+    }
+
+    public List<Message> getUnreadMessages(Long chatId, String username) {
+        ChatParticipant participant = participantRepository.findByChatIdAndUserUsername(chatId, username)
+                .orElseThrow(() -> new IllegalArgumentException("User not in chat"));
+        
+        Long lastReadId = participant.getLastReadMessageId();
+        if (lastReadId == null) {
+            return messageService.getAllChatMessages(chatId);
         }
+        
+        Message lastReadMessage = messageService.getMessageById(lastReadId)
+                .orElseThrow(() -> new IllegalStateException("Message not found for ID: " + lastReadId));
+        
+        return messageService.getMessagesAfter(chatId, lastReadMessage.getCreatedAt());
+    }
 
-        Message message = Message.builder()
-                .chat(chat)
-                .senderUsername(sender)
-                .content(content)
-                .type(Message.MessageType.CHAT)
-                .createdAt(LocalDateTime.now())
-                .messageId(messageId)
-                .build();
+    public void markMessagesAsRead(Long chatId, String username) {
+        participantRepository.findByChatIdAndUserUsername(chatId, username)
+                .ifPresent(participant -> {
+                    List<Message> unreadMessages = messageService.getUnreadMessagesForUser(chatId, username);
+                    if (!unreadMessages.isEmpty()) {
+                        messageService.markMessagesAsRead(chatId, username, LocalDateTime.now());
+                        participant.setLastReadMessageId(unreadMessages.get(unreadMessages.size() - 1).getId());
+                        participantRepository.save(participant);
+                    }
+                });
+    }
 
-        message = messageRepository.save(message);
 
-        chat.setLastMessageAt(LocalDateTime.now());
+    public Map<String, Object> leaveChat(Long chatId, String username) {
+        ChatParticipant participant = participantRepository.findByChatIdAndUserUsername(chatId, username)
+                .orElseThrow(() -> new IllegalArgumentException("User not in chat"));
+        participant.setLeftAt(LocalDateTime.now());
+        participantRepository.save(participant);
+        
+        Message leaveMessage = messageService.createSystemMessage(chatId, username, username + " left the chat", Message.MessageType.LEAVE);
+        
+        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new IllegalArgumentException("Chat not found"));
+        chat.setLastMessageAt(leaveMessage.getCreatedAt());
+        chat.setLastMessageId(leaveMessage.getMessageId());
         chatRepository.save(chat);
-
-        updateRedisCache(chatId, message);
-
-        messagingTemplate.convertAndSend("/topic/chat/" + chatId, message);
-
-        return Map.of("success", true, "messageId", message.getId());
+        
+        webSocketService.broadcastMessageToChat(chatId, leaveMessage);
+        return Map.of(
+                "success", true,
+                "message", "Left chat successfully"
+        );
     }
 
-    public List<Message> getUnreadMessages(Long chatId, String username) { ChatParticipant participant = participantRepository.findByChatIdAndUserUsername(chatId, username) .orElseThrow(() -> new IllegalArgumentException("User not in chat")); Long lastReadId = participant.getLastReadMessageId(); if (lastReadId == null) { return messageRepository.findByChatIdOrderByCreatedAtAsc(chatId); } return messageRepository.findMessagesAfter(chatId, messageRepository.findById(lastReadId).get().getCreatedAt()); }
-    public void markMessagesAsRead(Long chatId, String username) { participantRepository.findByChatIdAndUserUsername(chatId, username) .ifPresent(participant -> { List<Message> unreadMessages = messageRepository.findUnreadMessagesForUser(chatId, username); if (!unreadMessages.isEmpty()) { messageRepository.markMessagesAsRead(chatId, username, LocalDateTime.now()); participant.setLastReadMessageId(unreadMessages.get(unreadMessages.size() - 1).getId()); participantRepository.save(participant); } }); }
-
-    public Map<String, Object> leaveChat(Long chatId, String username) { ChatParticipant participant = participantRepository.findByChatIdAndUserUsername(chatId, username) .orElseThrow(() -> new IllegalArgumentException("User not in chat")); participant.setLeftAt(LocalDateTime.now()); participantRepository.save(participant); // Send leave message
-        Message leaveMessage = Message.builder() .chat(participant.getChat()) .senderUsername(username) .content(username + " left the chat") .type(Message.MessageType.LEAVE) .createdAt(LocalDateTime.now()) .build(); messageRepository.save(leaveMessage); broadcastMessageToChat(chatId, leaveMessage); return Map.of( "success", true, "message", "Left chat successfully" ); }
-
-    // ================= REDIS WRITE (LPUSH + TRIM) =================
-
-    private void updateRedisCache(Long chatId, Message message) {
-        try {
-            String key = chatKey(chatId);
-
-            double score = message.getCreatedAt().atZone(
-                    java.time.ZoneId.systemDefault()
-            ).toInstant().toEpochMilli();
-
-            redisTemplate.opsForZSet()
-                    .add(key, message, score);
-
-            // keep only last N messages
-            Long size = redisTemplate.opsForZSet().zCard(key);
-
-            if (size != null && size > CACHED_MESSAGE_SIZE) {
-                redisTemplate.opsForZSet()
-                        .removeRange(key, 0, size - CACHED_MESSAGE_SIZE - 1);
-            }
-
-        } catch (Exception e) {
-            System.err.println("Redis ZSET write failed: " + e.getMessage());
+    public Map<String, Object> joinChat(Long chatId, String username) {
+        if (!userService.userExists(username)) {
+            throw new IllegalArgumentException("User not found");
         }
+        
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
+                
+        if (participantRepository.findByChatIdAndUserUsername(chatId, username).isPresent()) {
+            throw new IllegalArgumentException("User already in chat");
+        }
+        
+        participantRepository.save(ChatParticipant.builder()
+                .chatId(chatId)
+                .userUsername(username)
+                .joinedAt(LocalDateTime.now())
+                .build());
+                
+        Message joinMessage = messageService.createSystemMessage(chatId, username, username + " joined the chat", Message.MessageType.JOIN);
+        
+        chat.setLastMessageAt(joinMessage.getCreatedAt());
+        chat.setLastMessageId(joinMessage.getMessageId());
+        chatRepository.save(chat);
+        
+        webSocketService.broadcastMessageToChat(chatId, joinMessage);
+        return Map.of(
+                "success", true,
+                "message", "Joined chat successfully",
+                "chatId", chatId
+        );
     }
 
-    public Map<String, Object> joinChat(Long chatId, String username) { if (!userRepository.existsById(username)) { throw new IllegalArgumentException("User not found"); } Chat chat = chatRepository.findById(chatId) .orElseThrow(() -> new IllegalArgumentException("Chat not found")); if (participantRepository.findByChatIdAndUserUsername(chatId, username).isPresent()) { throw new IllegalArgumentException("User already in chat"); } participantRepository.save(ChatParticipant.builder() .chat(chat) .user(userRepository.findById(username).get()) .joinedAt(LocalDateTime.now()) .build()); // Send join message
-        Message joinMessage = Message.builder() .chat(chat) .senderUsername(username) .content(username + " joined the chat") .type(Message.MessageType.JOIN) .createdAt(LocalDateTime.now()) .build(); messageRepository.save(joinMessage);
-        broadcastMessageToChat(chatId, joinMessage); return Map.of( "success", true, "message", "Joined chat successfully", "chatId", chatId ); }
-
-    // ================= MESSAGE READ =================
+    // ================= MESSAGE RETRIEVAL =================
 
     public List<Message> getChatMessages(Long chatId, String username) {
+        return getChatMessages(chatId, username, 0);
+    }
 
+    public List<Message> getChatMessages(Long chatId, String username, int page) {
         if (!participantRepository.findByChatIdAndUserUsername(chatId, username).isPresent()) {
             throw new IllegalArgumentException("User not in chat");
         }
 
-        String key = chatKey(chatId);
-
-        // 🔥 get last N messages (highest score first)
-        Set<Object> cached = redisTemplate.opsForZSet()
-                .reverseRange(key, 0, CACHED_MESSAGE_SIZE - 1);
-
-        if (cached != null && !cached.isEmpty()) {
-            return cached.stream()
-                    .map(o -> (Message) o)
-                    .toList();
+        if (page == 0) {
+            return cacheService.getMessagesWithCacheAside(chatId, 0, PAGE_SIZE);
         }
-
-        // fallback DB
-        List<Message> messages = messageRepository
-                .findByChatIdOrderByCreatedAtDesc(
-                        chatId,
-                        PageRequest.of(0, CACHED_MESSAGE_SIZE)
-                );
-
-        Collections.reverse(messages);
-
-        // rebuild cache
-        redisTemplate.delete(key);
-
-        for (Message m : messages) {
-            double score = m.getCreatedAt()
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli();
-
-            redisTemplate.opsForZSet().add(key, m, score);
-        }
-
-        return messages;
+        
+        return messageService.getChatMessages(chatId, page);
     }
 
     // ================= USER CHATS =================
 
     public List<Chat> getUserChats(String username) {
-        if (!userRepository.existsById(username)) {
+        if (!userService.userExists(username)) {
             throw new IllegalArgumentException("User not found");
         }
 
         return chatRepository.findUserChatsOrderByLastMessage(username);
     }
 
-    // ================= MESSAGE ID =================
+    // ================= USER OPERATIONS (delegated to UserService) =================
 
-    private String generateMessageId(Long chatId, String sender, String content) {
-
-        String data = chatId + "_" + sender + "_" + content;
-
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(data.getBytes());
-
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-
-            return "msg_" + sb;
-
-        } catch (Exception e) {
-            return "msg_" + data.hashCode();
-        }
+    public Map<String, Object> registerUser(String username) {
+        return userService.registerUser(username);
     }
 
-    // ================= OTHER FEATURES =================
+    public Map<String, Object> loginUser(String username) {
+        return userService.loginUser(username);
+    }
 
     public void setUserOnline(String username) {
-        User user = userRepository.findById(username)
-                .orElseThrow();
-
-        user.setIsOnline(true);
-        user.setLastSeen(LocalDateTime.now());
-        userRepository.save(user);
+        userService.setUserOnline(username);
     }
 
     public void setUserOffline(String username) {
-        userRepository.setOffline(username, LocalDateTime.now());
+        userService.setUserOffline(username);
     }
-
-    private void broadcastMessageToChat(Long chatId, Message message) { messagingTemplate.convertAndSend("/topic/chat/" + chatId, message); }
 
     public void handleWebSocketDisconnect(String username) {
-        if (username != null) {
-            setUserOffline(username);
-        }
+        userService.handleWebSocketDisconnect(username);
     }
+
 }

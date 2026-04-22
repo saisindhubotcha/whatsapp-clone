@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/chat/api")
 public class ChatRestController {
 
     @Autowired
@@ -107,26 +107,6 @@ public class ChatRestController {
     }
 
     // ================= MESSAGES =================
-
-    @PostMapping("/chats/{chatId}/messages")
-    public ResponseEntity<Map<String, Object>> sendMessage(
-            @PathVariable Long chatId,
-            @RequestBody Map<String, String> request) {
-
-        try {
-            return ResponseEntity.ok(
-                    chatService.sendMessage(
-                            chatId,
-                            request.get("senderUsername"),
-                            request.get("content"),
-                            request.get("messageId")
-                    )
-            );
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "error", e.getMessage()));
-        }
-    }
 
     @GetMapping("/chats/{chatId}/messages")
     public ResponseEntity<List<Message>> getMessages(

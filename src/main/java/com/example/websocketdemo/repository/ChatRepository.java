@@ -12,15 +12,15 @@ import java.util.Optional;
 @Repository
 public interface ChatRepository extends JpaRepository<Chat, Long> {
     
-    @Query("SELECT c FROM Chat c JOIN c.participants cp WHERE cp.user.username = :username AND cp.leftAt IS NULL")
+    @Query("SELECT c FROM Chat c WHERE c.id IN (SELECT cp.chatId FROM ChatParticipant cp WHERE cp.userUsername = :username AND cp.leftAt IS NULL)")
     List<Chat> findUserChats(@Param("username") String username);
     
-    @Query("SELECT c FROM Chat c JOIN c.participants cp WHERE cp.user.username = :username AND cp.leftAt IS NULL ORDER BY c.lastMessageAt DESC")
+    @Query("SELECT c FROM Chat c WHERE c.id IN (SELECT cp.chatId FROM ChatParticipant cp WHERE cp.userUsername = :username AND cp.leftAt IS NULL) ORDER BY c.lastMessageAt DESC")
     List<Chat> findUserChatsOrderByLastMessage(@Param("username") String username);
     
     @Query("SELECT c FROM Chat c WHERE c.createdBy = :username")
     List<Chat> findChatsCreatedByUser(@Param("username") String username);
     
-    @Query("SELECT c FROM Chat c JOIN c.participants cp WHERE cp.user.username = :username AND cp.leftAt IS NULL AND c.id = :chatId")
+    @Query("SELECT c FROM Chat c WHERE c.id = :chatId AND c.id IN (SELECT cp.chatId FROM ChatParticipant cp WHERE cp.userUsername = :username AND cp.leftAt IS NULL)")
     Optional<Chat> findUserChatById(@Param("username") String username, @Param("chatId") Long chatId);
 }

@@ -21,16 +21,12 @@ public class ChatParticipant {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "chat_id", nullable = false)
+    private Long chatId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_id", nullable = false)
-    @JsonIgnore
-    private Chat chat;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_username", nullable = false)
-    @JsonIgnore
-    private User user;
+    @Column(name = "user_username", nullable = false)
+    private String userUsername;
     
     @Column(name = "joined_at", nullable = false)
     private LocalDateTime joinedAt;

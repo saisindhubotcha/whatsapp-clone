@@ -35,13 +35,8 @@ public class Chat {
     @Column(name = "last_message_at")
     private LocalDateTime lastMessageAt;
     
-    @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private List<ChatParticipant> participants;
-    
-    @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private List<Message> messages;
+    @Column(name = "last_message_id")
+    private String lastMessageId;
     
     @Column(name = "is_group_chat", nullable = false)
     private Boolean isGroupChat = false;
