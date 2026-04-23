@@ -25,7 +25,9 @@ public class CacheService {
 
     private static final String MESSAGE_KEY_PREFIX = "message:";
     private static final String CHAT_MESSAGES_KEY_PREFIX = "chat:";
+    private static final String USER_SUBSCRIPTIONS_PREFIX = "user:subscriptions:";
     private static final int CACHE_SIZE = 100;
+    private static final Duration SUBSCRIPTION_TTL = Duration.ofMinutes(5);
 
     private String messageKey(String messageId) {
         return MESSAGE_KEY_PREFIX + (messageId != null ? messageId.trim() : "");
@@ -241,6 +243,60 @@ public class CacheService {
         } catch (Exception e) {
             System.err.println("Cache-aside pattern failed: " + e.getMessage());
             return messageService.getChatMessages(chatId, 0);
+        }
+    }
+
+    // ================= SUBSCRIPTION TRACKING =================
+
+    private String userSubscriptionsKey(String userId) {
+        return USER_SUBSCRIPTIONS_PREFIX + userId;
+    }
+
+    public void addSubscription(String userId, String destination) {
+        try {
+            String key = userSubscriptionsKey(userId);
+            redisTemplate.opsForSet().add(key, destination);
+            redisTemplate.expire(key, SUBSCRIPTION_TTL);
+        } catch (Exception e) {
+            System.err.println("Failed to add subscription to Redis: " + e.getMessage());
+        }
+    }
+
+    public void removeSubscription(String userId, String destination) {
+        try {
+            String key = userSubscriptionsKey(userId);
+            redisTemplate.opsForSet().remove(key, destination);
+        } catch (Exception e) {
+            System.err.println("Failed to remove subscription from Redis: " + e.getMessage());
+        }
+    }
+
+    public Set<Object> getUserSubscriptions(String userId) {
+        try {
+            String key = userSubscriptionsKey(userId);
+            Set<Object> subscriptions = redisTemplate.opsForSet().members(key);
+            return subscriptions != null ? subscriptions : java.util.Collections.emptySet();
+        } catch (Exception e) {
+            System.err.println("Failed to get subscriptions from Redis: " + e.getMessage());
+            return java.util.Collections.emptySet();
+        }
+    }
+
+    public void renewSubscriptionTTL(String userId) {
+        try {
+            String key = userSubscriptionsKey(userId);
+            redisTemplate.expire(key, SUBSCRIPTION_TTL);
+        } catch (Exception e) {
+            System.err.println("Failed to renew subscription TTL: " + e.getMessage());
+        }
+    }
+
+    public void clearUserSubscriptions(String userId) {
+        try {
+            String key = userSubscriptionsKey(userId);
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            System.err.println("Failed to clear subscriptions from Redis: " + e.getMessage());
         }
     }
 }

@@ -111,7 +111,7 @@ async function connect(event) {
             var socket = new SockJS('/ws');
             stompClient = Stomp.over(socket);
 
-            stompClient.connect({}, onConnected, onError);
+            stompClient.connect({username: username}, onConnected, onError);
 
         } catch (error) {
             console.error('Error joining chat:', error);
@@ -500,6 +500,11 @@ function onConnected() {
     stompClient.subscribe('/topic/public', onMessageReceived);
     console.log('Subscribed to /topic/public');
     
+    // Subscribe to user-specific topic for reconnect notifications
+    console.log('Subscribing to /topic/user/' + username);
+    stompClient.subscribe('/topic/user/' + username, onUserMessageReceived);
+    console.log('Subscribed to /topic/user/' + username);
+    
     connectingElement.classList.add('hidden');
     
     // Load user chats
@@ -514,6 +519,31 @@ function onConnected() {
     console.log('Sending JOIN message:', joinMessage);
     stompClient.send("/app/user/add", {}, JSON.stringify(joinMessage));
     console.log('JOIN message sent');
+}
+
+// Handle user-specific messages (reconnect subscriptions)
+function onUserMessageReceived(payload) {
+    console.log('User-specific message received:', payload);
+    var message = JSON.parse(payload.body);
+    
+    if (message.type === 'reconnect_subscriptions' && message.subscriptions) {
+        console.log('Received reconnect subscriptions:', message.subscriptions);
+        message.subscriptions.forEach(function(destination) {
+            // Skip /topic/public and /topic/user/* since we already subscribed in onConnected
+            if (destination === '/topic/public' || destination.startsWith('/topic/user/')) {
+                console.log('Skipping already-subscribed topic:', destination);
+                return;
+            }
+            console.log('Auto-resubscribing to:', destination);
+            stompClient.subscribe(destination, onChatMessageReceived);
+        });
+        
+        // If there was a previous chat selected, re-select it
+        if (currentChatId) {
+            console.log('Re-selecting previous chat:', currentChatId);
+            selectChat(currentChatId);
+        }
+    }
 }
 
 function onError(error) {

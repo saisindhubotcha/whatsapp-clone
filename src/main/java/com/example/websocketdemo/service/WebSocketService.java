@@ -5,8 +5,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class WebSocketService {
@@ -18,31 +21,16 @@ public class WebSocketService {
         messagingTemplate.convertAndSend("/topic/chat/" + chatId, message);
     }
 
-    public void broadcastMessageToChat(Long chatId, Object message) {
-        messagingTemplate.convertAndSend("/topic/chat/" + chatId, message);
-    }
+    public void sendStoredSubscriptions(String username, Set<Object> subscriptions) {
+        List<String> destinations = new ArrayList<>();
+        for (Object sub : subscriptions) {
+            destinations.add(String.valueOf(sub));
+        }
 
-    public void broadcastToUser(String username, String destination, Object message) {
-        messagingTemplate.convertAndSend("/topic/user/" + username, message);
-    }
+        Map<String, Object> reconnectMessage = new HashMap<>();
+        reconnectMessage.put("type", "reconnect_subscriptions");
+        reconnectMessage.put("subscriptions", destinations);
 
-    public void broadcastToAllUsers(String destination, Object message) {
-        messagingTemplate.convertAndSend("/topic/all", message);
-    }
-
-    public void sendTypingIndicator(Long chatId, String username, boolean isTyping) {
-        Map<String, Object> typingMessage = new HashMap<>();
-        typingMessage.put("type", "typing");
-        typingMessage.put("username", username);
-        typingMessage.put("isTyping", isTyping);
-        broadcastMessageToChat(chatId, typingMessage);
-    }
-
-    public void sendUserStatusUpdate(String username, boolean isOnline) {
-        Map<String, Object> statusMessage = new HashMap<>();
-        statusMessage.put("type", "user_status");
-        statusMessage.put("username", username);
-        statusMessage.put("isOnline", isOnline);
-        broadcastToAllUsers("/topic/user_status", statusMessage);
+        messagingTemplate.convertAndSend("/topic/user/" + username, reconnectMessage);
     }
 }

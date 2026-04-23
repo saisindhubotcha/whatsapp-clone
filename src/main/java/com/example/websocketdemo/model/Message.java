@@ -8,6 +8,8 @@ import lombok.Builder;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "messages")
@@ -51,6 +53,11 @@ public class Message {
     
     @Column(name = "message_id", unique = true)
     private String messageId;
+    
+    @ElementCollection
+    @CollectionTable(name = "message_read_by_users", joinColumns = @JoinColumn(name = "message_id"))
+    @Column(name = "username")
+    private Set<String> readByUsers = new HashSet<>();
     
     public enum MessageType {
         CHAT,
