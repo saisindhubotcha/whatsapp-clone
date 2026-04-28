@@ -16,16 +16,15 @@ import java.util.Arrays;
 public class CacheConfig {
 
     @Bean
-    JedisConnectionFactory jedisConnectionFactory() {
-        String[] cluserNodesList = new String[] {"localhost:6379"};
-        return new JedisConnectionFactory(new RedisClusterConfiguration(Arrays.asList(cluserNodesList)));
+    public RedisConnectionFactory redisConnectionFactory() {
+        return new JedisConnectionFactory();
     }
 
     @Bean
     public RedisTemplate<String, Object> redisTemplate() {
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
-        template.setConnectionFactory(jedisConnectionFactory());
+        template.setConnectionFactory(redisConnectionFactory());
 
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(new org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer());
