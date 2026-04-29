@@ -1,7 +1,7 @@
 package com.example.websocketdemo.service;
 
 import com.example.websocketdemo.model.Message;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -15,13 +15,11 @@ import java.util.concurrent.CompletableFuture;
 
 @Service
 @EnableAsync
+@AllArgsConstructor
 public class CacheService {
 
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-
-    @Autowired
-    private MessageService messageService;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final MessageService messageService;
 
     private static final String MESSAGE_KEY_PREFIX = "message:";
     private static final String CHAT_MESSAGES_KEY_PREFIX = "chat:";
@@ -35,16 +33,6 @@ public class CacheService {
 
     private String chatMessagesKey(Long chatId) {
         return CHAT_MESSAGES_KEY_PREFIX + chatId + ":messages";
-    }
-
-    @Async
-    public CompletableFuture<Void> refreshCacheWithRecentMessages(Long chatId, List<Message> recentMessages) {
-        try {
-            refreshCacheWithRecentMessagesSync(chatId, recentMessages);
-        } catch (Exception e) {
-            System.err.println("Cache refresh failed: " + e.getMessage());
-        }
-        return CompletableFuture.completedFuture(null);
     }
 
     public void refreshCacheWithRecentMessagesSync(Long chatId, List<Message> recentMessages) {
@@ -159,34 +147,6 @@ public class CacheService {
         } catch (Exception e) {
             System.err.println("Cache freshness check failed: " + e.getMessage());
             return false;
-        }
-    }
-
-    public boolean isCacheFreshAtomic(Long chatId) {
-        try {
-            String lastDbMessageId = messageService.getLastMessageId(chatId);
-            return isCacheFresh(chatId, lastDbMessageId);
-        } catch (Exception e) {
-            System.err.println("Atomic cache freshness check failed: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public void clearCacheForChat(Long chatId) {
-        try {
-            String chatKey = chatMessagesKey(chatId);
-            Set<Object> messageIds = redisTemplate.opsForZSet().range(chatKey.trim(), 0, -1);
-            
-            if (messageIds != null) {
-                for (Object messageId : messageIds) {
-                    String messageKey = messageKey(String.valueOf(messageId));
-                    redisTemplate.delete(messageKey.trim());
-                }
-            }
-            
-            redisTemplate.delete(chatKey.trim());
-        } catch (Exception e) {
-            System.err.println("Failed to clear cache for chat: " + e.getMessage());
         }
     }
 

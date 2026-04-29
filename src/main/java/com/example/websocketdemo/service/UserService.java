@@ -2,7 +2,7 @@ package com.example.websocketdemo.service;
 
 import com.example.websocketdemo.model.User;
 import com.example.websocketdemo.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,10 +12,10 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@AllArgsConstructor
 public class UserService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
     public Map<String, Object> registerUser(String username) {
         if (username == null || username.trim().isEmpty()) {
@@ -66,11 +66,6 @@ public class UserService {
         return userRepository.existsById(username);
     }
 
-    public User getUser(String username) {
-        return userRepository.findById(username)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
-    }
-
     public void setUserOnline(String username) {
         User user = userRepository.findById(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
@@ -81,7 +76,12 @@ public class UserService {
     }
 
     public void setUserOffline(String username) {
-        userRepository.setOffline(username, LocalDateTime.now());
+        User user = userRepository.findById(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+
+        user.setIsOnline(false);
+        user.setLastSeen(LocalDateTime.now());
+        userRepository.save(user);
     }
 
     public void handleWebSocketDisconnect(String username) {

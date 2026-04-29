@@ -4,7 +4,7 @@ import com.example.websocketdemo.model.Chat;
 import com.example.websocketdemo.model.Message;
 import com.example.websocketdemo.repository.ChatRepository;
 import com.example.websocketdemo.repository.MessageRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,16 +13,12 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
+@RequiredArgsConstructor
 public class ShardedRepository {
 
-    @Autowired
-    private ChatRepository chatRepository;
-
-    @Autowired
-    private MessageRepository messageRepository;
-
-    @Autowired
-    private ShardRouter shardRouter;
+    private final ChatRepository chatRepository;
+    private final MessageRepository messageRepository;
+    private final ShardRouter shardRouter;
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;

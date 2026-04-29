@@ -1,6 +1,5 @@
 package com.example.websocketdemo.sharding;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -13,18 +12,20 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class ShardRouter {
 
-    @Autowired
-    private ConsistentHashRing hashRing;
-
-    @Autowired
-    @Qualifier("shardingRedisTemplate")
-    private RedisTemplate<String, String> redisTemplate;
+    private final ConsistentHashRing hashRing;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Value("${sharding.default.shards:shard0,shard1,shard2}")
     private List<String> defaultShards;
 
     @Value("${sharding.metadata.ttl:86400}")
     private long metadataTtlSeconds;
+
+    public ShardRouter(ConsistentHashRing hashRing,
+                      @Qualifier("shardingRedisTemplate") RedisTemplate<String, String> redisTemplate) {
+        this.hashRing = hashRing;
+        this.redisTemplate = redisTemplate;
+    }
 
     private static final String SHARD_METADATA_KEY_PREFIX = "chat:shard:";
 

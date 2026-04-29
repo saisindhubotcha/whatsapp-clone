@@ -5,7 +5,7 @@ import com.example.websocketdemo.repository.MessageRepository;
 import com.example.websocketdemo.sharding.ShardContext;
 import com.example.websocketdemo.sharding.ShardRouter;
 import com.example.websocketdemo.sharding.ShardedRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -19,19 +19,13 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class MessageService {
 
-    @Autowired
-    private MessageRepository messageRepository;
-
-    @Autowired
-    private CacheService cacheService;
-
-    @Autowired
-    private ShardRouter shardRouter;
-
-    @Autowired
-    private ShardedRepository shardedRepository;
+    private final MessageRepository messageRepository;
+    private final CacheService cacheService;
+    private final ShardRouter shardRouter;
+    private final ShardedRepository shardedRepository;
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;
@@ -232,38 +226,5 @@ public class MessageService {
         cacheService.updateMessageInCache(updatedMessage);
         
         return updatedMessage;
-    }
-
-    public void deleteMessage(Long messageId, String username) {
-        Optional<Message> messageOpt = getMessageById(messageId);
-        if (!messageOpt.isPresent()) {
-            throw new IllegalArgumentException("Message not found");
-        }
-
-        Message message = messageOpt.get();
-        if (!message.getSenderUsername().equals(username)) {
-            throw new IllegalArgumentException("Only sender can delete message");
-        }
-
-        // Use appropriate repository for deletion
-        if (shardingEnabled) {
-            // Find the shard containing this message and delete it
-            String shard = shardRouter.resolveShard(message.getChatId());
-            String originalShard = ShardContext.getShard();
-            try {
-                ShardContext.setShard(shard);
-                messageRepository.delete(message);
-            } finally {
-                if (originalShard != null) {
-                    ShardContext.setShard(originalShard);
-                } else {
-                    ShardContext.clear();
-                }
-            }
-        } else {
-            messageRepository.delete(message);
-        }
-        
-        cacheService.invalidateMessage(message.getChatId(), message.getMessageId());
     }
 }

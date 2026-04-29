@@ -3,7 +3,7 @@ package com.example.websocketdemo.controller;
 import com.example.websocketdemo.model.Chat;
 import com.example.websocketdemo.model.Message;
 import com.example.websocketdemo.service.ChatService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,10 +12,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/chat/api")
+@AllArgsConstructor
 public class ChatRestController {
 
-    @Autowired
-    private ChatService chatService;
+    private final ChatService chatService;
 
     // ================= USERS =================
 

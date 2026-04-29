@@ -2,10 +2,10 @@ package com.example.websocketdemo.sharding;
 
 import com.example.websocketdemo.model.Chat;
 import com.example.websocketdemo.model.Message;
+import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -13,10 +13,10 @@ import java.util.List;
 
 @Aspect
 @Component
+@RequiredArgsConstructor
 public class ShardingAspect {
 
-    @Autowired
-    private ShardRouter shardRouter;
+    private final ShardRouter shardRouter;
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;

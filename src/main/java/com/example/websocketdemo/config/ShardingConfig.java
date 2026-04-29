@@ -1,8 +1,8 @@
 package com.example.websocketdemo.config;
 
+import lombok.RequiredArgsConstructor;
 import com.example.websocketdemo.sharding.ShardingRoutingDataSource;
 import com.example.websocketdemo.sharding.ShardRouter;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.Map;
 
 @Configuration
+@RequiredArgsConstructor
 public class ShardingConfig {
 
-    @Autowired
-    private ShardRouter shardRouter;
+    private final ShardRouter shardRouter;
 
     @Value("#{'${sharding.datasource.urls}'.split(',')}")
     private List<String> datasourceUrls;

@@ -2,7 +2,7 @@ package com.example.websocketdemo.controller;
 
 import com.example.websocketdemo.model.ChatMessage;
 import com.example.websocketdemo.service.ChatService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
@@ -10,10 +10,10 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 @Controller
+@AllArgsConstructor
 public class WebSocketMessageController {
 
-    @Autowired
-    private ChatService chatService;
+    private final ChatService chatService;
 
     @MessageMapping("/chat/send")
     public void sendMessage(@Payload ChatMessage chatMessage) {

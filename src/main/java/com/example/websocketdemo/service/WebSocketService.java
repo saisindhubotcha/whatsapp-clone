@@ -1,7 +1,7 @@
 package com.example.websocketdemo.service;
 
 import com.example.websocketdemo.model.Message;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
 
@@ -12,10 +12,10 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
+@AllArgsConstructor
 public class WebSocketService {
 
-    @Autowired
-    private SimpMessageSendingOperations messagingTemplate;
+    private final SimpMessageSendingOperations messagingTemplate;
 
     public void broadcastMessageToChat(Long chatId, Message message) {
         messagingTemplate.convertAndSend("/topic/chat/" + chatId, message);

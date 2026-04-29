@@ -6,7 +6,7 @@ import com.example.websocketdemo.sharding.ShardContext;
 import com.example.websocketdemo.sharding.ShardRouter;
 import com.example.websocketdemo.sharding.ShardedRepository;
 import com.example.websocketdemo.sharding.ChatShardedRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -20,31 +20,17 @@ import java.util.Optional;
 
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ChatService {
 
-    @Autowired
-    private ChatShardedRepository chatShardedRepository;
-
-    @Autowired
-    private ChatParticipantRepository participantRepository;
-
-    @Autowired
-    private UserService userService;
-
-    @Autowired
-    private MessageService messageService;
-
-    @Autowired
-    private CacheService cacheService;
-
-    @Autowired
-    private WebSocketService webSocketService;
-
-    @Autowired
-    private ShardRouter shardRouter;
-
-    @Autowired
-    private ShardedRepository shardedRepository;
+    private final ChatShardedRepository chatShardedRepository;
+    private final ChatParticipantRepository participantRepository;
+    private final UserService userService;
+    private final MessageService messageService;
+    private final CacheService cacheService;
+    private final WebSocketService webSocketService;
+    private final ShardRouter shardRouter;
+    private final ShardedRepository shardedRepository;
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;
