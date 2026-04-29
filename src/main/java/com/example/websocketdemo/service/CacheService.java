@@ -19,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
 public class CacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
-    private final MessageService messageService;
 
     private static final String MESSAGE_KEY_PREFIX = "message:";
     private static final String CHAT_MESSAGES_KEY_PREFIX = "chat:";
@@ -180,10 +179,8 @@ public class CacheService {
         }
     }
 
-    public List<Message> getMessagesWithCacheAside(Long chatId, int fromIndex, int toIndex) {
+    public List<Message> getMessagesWithCacheAside(Long chatId, int fromIndex, int toIndex, String lastDbMessageId, List<Message> dbMessages) {
         try {
-            String lastDbMessageId = messageService.getLastMessageId(chatId);
-            
             if (lastDbMessageId != null && isCacheFresh(chatId, lastDbMessageId)) {
                 List<Message> cachedMessages = getMessagesFromCache(chatId, fromIndex, toIndex, null);
                 if (cachedMessages != null) {
@@ -191,7 +188,6 @@ public class CacheService {
                 }
             }
             
-            List<Message> dbMessages = messageService.getChatMessages(chatId, 0);
             refreshCacheWithRecentMessagesSync(chatId, dbMessages);
             
             if (fromIndex == 0 && toIndex <= dbMessages.size()) {
@@ -202,7 +198,7 @@ public class CacheService {
             
         } catch (Exception e) {
             System.err.println("Cache-aside pattern failed: " + e.getMessage());
-            return messageService.getChatMessages(chatId, 0);
+            return dbMessages;
         }
     }
 

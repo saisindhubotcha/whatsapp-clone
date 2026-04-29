@@ -196,7 +196,9 @@ public class ChatService {
         }
 
         if (page == 0) {
-            return cacheService.getMessagesWithCacheAside(chatId, 0, PAGE_SIZE);
+            List<Message> dbMessages = messageService.getChatMessages(chatId, 0);
+            String lastDbMessageId = messageService.getLastMessageId(chatId);
+            return cacheService.getMessagesWithCacheAside(chatId, 0, PAGE_SIZE, lastDbMessageId, dbMessages);
         }
         
         return messageService.getChatMessages(chatId, page);
