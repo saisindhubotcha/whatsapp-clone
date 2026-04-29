@@ -2,10 +2,6 @@ package com.example.websocketdemo.service;
 
 import com.example.websocketdemo.model.*;
 import com.example.websocketdemo.repository.*;
-import com.example.websocketdemo.sharding.ShardContext;
-import com.example.websocketdemo.sharding.ShardRouter;
-import com.example.websocketdemo.sharding.ShardedRepository;
-import com.example.websocketdemo.sharding.ChatShardedRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -23,14 +19,13 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ChatService {
 
-    private final ChatShardedRepository chatShardedRepository;
     private final ChatParticipantRepository participantRepository;
     private final UserService userService;
     private final MessageService messageService;
     private final CacheService cacheService;
+    private final ChatRepository chatRepository;
     private final WebSocketService webSocketService;
-    private final ShardRouter shardRouter;
-    private final ShardedRepository shardedRepository;
+
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;
@@ -60,7 +55,7 @@ public class ChatService {
                 .isGroupChat(valid.size() > 2)
                 .build();
 
-        chat = shardedRepository.saveChat(chat);
+        chat = chatRepository.save(chat);
 
         for (String u : valid) {
             participantRepository.save(ChatParticipant.builder()
@@ -81,7 +76,7 @@ public class ChatService {
             throw new IllegalArgumentException("User not found");
         }
 
-        Chat chat = shardedRepository.findChatById(chatId)
+        Chat chat = chatRepository.findById(chatId)
                 .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
 
         if (!participantRepository.findByChatIdAndUserUsername(chatId, sender).isPresent()) {
@@ -95,7 +90,7 @@ public class ChatService {
             
             chat.setLastMessageAt(message.getCreatedAt());
             chat.setLastMessageId(message.getMessageId());
-            shardedRepository.saveChat(chat);
+            chatRepository.save(chat);
 
             cacheService.refreshCacheWithRecentMessagesSync(chatId, messageService.getRecentMessages(chatId, 20));
             webSocketService.broadcastMessageToChat(chatId, message);
@@ -140,10 +135,10 @@ public class ChatService {
         
         Message leaveMessage = messageService.createSystemMessage(chatId, username, username + " left the chat", Message.MessageType.LEAVE);
         
-        Chat chat = shardedRepository.findChatById(chatId).orElseThrow(() -> new IllegalArgumentException("Chat not found"));
+        Chat chat = chatRepository.findById(chatId).orElseThrow(() -> new IllegalArgumentException("Chat not found"));
         chat.setLastMessageAt(leaveMessage.getCreatedAt());
         chat.setLastMessageId(leaveMessage.getMessageId());
-        shardedRepository.saveChat(chat);
+        chatRepository.save(chat);
         
         webSocketService.broadcastMessageToChat(chatId, leaveMessage);
         return Map.of(
@@ -157,7 +152,7 @@ public class ChatService {
             throw new IllegalArgumentException("User not found");
         }
         
-        Chat chat = shardedRepository.findChatById(chatId)
+        Chat chat = chatRepository.findById(chatId)
                 .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
                 
         if (participantRepository.findByChatIdAndUserUsername(chatId, username).isPresent()) {
@@ -174,7 +169,7 @@ public class ChatService {
         
         chat.setLastMessageAt(joinMessage.getCreatedAt());
         chat.setLastMessageId(joinMessage.getMessageId());
-        shardedRepository.saveChat(chat);
+        chatRepository.save(chat);
         
         webSocketService.broadcastMessageToChat(chatId, joinMessage);
         return Map.of(
@@ -211,7 +206,7 @@ public class ChatService {
             throw new IllegalArgumentException("User not found");
         }
 
-        return chatShardedRepository.findUserChats(username);
+        return chatRepository.findUserChats(username);
     }
 
     // ================= USER OPERATIONS (delegated to UserService) =================

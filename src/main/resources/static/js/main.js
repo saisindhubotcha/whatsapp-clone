@@ -56,7 +56,7 @@ async function connect(event) {
         try {
             // Login user (backend will auto-create if not exists)
             console.log('Authenticating user:', username);
-            const loginResponse = await fetch(`/api/v1/users/${username}/login`, {
+            const loginResponse = await fetch(`/chat/api/users/${username}/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ async function connect(event) {
             }
 
             // Set user as online
-            const onlineResponse = await fetch(`/api/v1/users/${username}/online`, { method: 'POST' });
+            const onlineResponse = await fetch(`/chat/api/users/${username}/online`, { method: 'POST' });
             console.log('Online response status:', onlineResponse.status);
 
             // Update UI with user info
@@ -127,7 +127,7 @@ async function connect(event) {
 // Load user's chats
 async function loadUserChats() {
     try {
-        const response = await fetch(`/api/v1/users/${username}/chats`);
+        const response = await fetch(`/chat/api/users/${username}/chats`);
         if (response.ok) {
             userChats = await response.json();
             updateChatList();
@@ -285,7 +285,7 @@ async function createChat(event) {
     }
     
     try {
-        const response = await fetch('/api/v1/chats', {
+        const response = await fetch('/chat/api/chats', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -347,7 +347,7 @@ async function quickCreateChat(event) {
     try {
         console.log('Creating chat with:', { name: chatName, createdBy: username, participants: participants });
         
-        const response = await fetch('/api/v1/chats', {
+        const response = await fetch('/chat/api/chats', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -395,7 +395,7 @@ async function quickCreateChat(event) {
 // Join existing chat
 async function joinChat(chatId) {
     try {
-        const response = await fetch(`/api/v1/chats/${chatId}/join`, {
+        const response = await fetch(`/chat/api/chats/${chatId}/join`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -433,7 +433,7 @@ async function leaveChat() {
     }
     
     try {
-        const response = await fetch(`/api/v1/chats/${currentChatId}/leave`, {
+        const response = await fetch(`/chat/api/chats/${currentChatId}/leave`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -477,7 +477,7 @@ async function leaveChat() {
 // Mark messages as read
 async function markMessagesAsRead(chatId) {
     try {
-        const response = await fetch(`/api/v1/chats/${chatId}/read`, {
+        const response = await fetch(`/chat/api/chats/${chatId}/read`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -575,37 +575,9 @@ async function sendMessage(event) {
             };
             
             console.log('WebSocket message:', chatMessage);
-            stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
+            stompClient.send("/app/chat/send", {}, JSON.stringify(chatMessage));
             messageInput.value = '';
             console.log('Message sent via WebSocket');
-            
-            // Also store in database via REST API
-            try {
-                console.log('Storing message in database...');
-                const dbResponse = await fetch(`/api/v1/chats/${currentChatId}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        senderUsername: username,
-                        content: messageContent,
-                        messageId: messageId
-                    })
-                });
-                console.log('Database response status:', dbResponse.status);
-                if (dbResponse.ok) {
-                    const result = await dbResponse.json();
-                    console.log('Message stored in database successfully:', result);
-                    if (result.duplicate) {
-                        console.log('Duplicate message detected and handled');
-                    }
-                } else {
-                    console.error('Database storage failed:', dbResponse.status);
-                }
-            } catch (dbError) {
-                console.error('Error storing message in database:', dbError);
-            }
             
             console.log('sendMessage completed successfully');
             
@@ -758,7 +730,7 @@ function renderMessage(message) {
 async function loadChatHistory(chatId) {
     console.log('Loading chat history for chat ID:', chatId);
     try {
-        const url = `/api/v1/chats/${chatId}/messages?username=${encodeURIComponent(username)}`;
+        const url = `/chat/api/chats/${chatId}/messages?username=${encodeURIComponent(username)}`;
         console.log('Fetching chat history from:', url);
         const response = await fetch(url);
         console.log('Chat history response status:', response.status);
