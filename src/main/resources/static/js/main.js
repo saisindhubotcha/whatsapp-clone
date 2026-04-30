@@ -56,7 +56,7 @@ async function connect(event) {
         try {
             // Login user (backend will auto-create if not exists)
             console.log('Authenticating user:', username);
-            const loginResponse = await fetch(`/chat/api/users/${username}/login`, {
+        const loginResponse = await fetch(`/chat/api/users/${username}/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -558,34 +558,9 @@ async function sendMessage(event) {
     console.log('stompClient:', stompClient ? 'connected' : 'null');
     console.log('currentChatId:', currentChatId);
 
-    if(messageContent && stompClient && currentChatId) {
-        try {
-            console.log('Sending message...');
-            
-            // Generate deterministic messageId for deduplication
-            const messageId = generateMessageId(currentChatId, username, messageContent);
-            
-            // Send message through WebSocket for real-time delivery
-            const chatMessage = {
-                type: 'CHAT',
-                sender: username,
-                content: messageContent,
-                chatId: currentChatId,
-                messageId: messageId
-            };
-            
-            console.log('WebSocket message:', chatMessage);
-            stompClient.send("/app/chat/send", {}, JSON.stringify(chatMessage));
-            messageInput.value = '';
-            console.log('Message sent via WebSocket');
-            
-            console.log('sendMessage completed successfully');
-            
-        } catch (error) {
-            console.error('Error sending message:', error);
-            console.error('Error stack:', error.stack);
-            alert('Failed to send message: ' + error.message);
-        }
+    if(messageContent && currentChatId) {
+        // Use HTTP API as primary method
+        await sendMessageViaHTTP(currentChatId, username, messageContent, generateMessageId(currentChatId, username, messageContent));
     } else {
         console.log('Cannot send message - missing requirements');
         if (!messageContent) console.log('No message content');
@@ -594,6 +569,9 @@ async function sendMessage(event) {
         
         if (!currentChatId) {
             alert('Please select a chat first');
+        } else if (!stompClient || !stompClient.connected) {
+            console.log('WebSocket not available, using HTTP API');
+            await sendMessageViaHTTP(currentChatId, username, messageContent, generateMessageId(currentChatId, username, messageContent));
         }
     }
     console.log('sendMessage function finished');
@@ -975,7 +953,8 @@ function getAvatarColor(messageSender) {
 }
 
 function formatTime(timestamp) {
-    const date = new Date(timestamp);
+    // Handle both millisecond timestamps and LocalDateTime strings
+    const date = new Date(typeof timestamp === 'number' ? timestamp : timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -1070,3 +1049,37 @@ if (createChatModal) {
 }
 
 console.log('All event listeners setup completed successfully!');
+
+// HTTP API fallback for sending messages
+async function sendMessageViaHTTP(chatId, sender, content, messageId) {
+    try {
+        console.log('Sending message via HTTP API...');
+        
+        const response = await fetch(`/chat/api/chats/${chatId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                sender: sender,
+                content: content,
+                messageId: messageId
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Message sent via HTTP API successfully:', result);
+            messageInput.value = '';
+            console.log('sendMessage completed successfully via HTTP');
+        } else {
+            const errorText = await response.text();
+            console.error('HTTP API error:', response.status, errorText);
+            alert('Failed to send message via HTTP API: ' + errorText);
+        }
+    } catch (error) {
+        console.error('Error sending message via HTTP API:', error);
+        console.error('Error stack:', error.stack);
+        alert('Failed to send message: ' + error.message);
+    }
+}

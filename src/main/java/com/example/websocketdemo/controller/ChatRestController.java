@@ -108,6 +108,24 @@ public class ChatRestController {
 
     // ================= MESSAGES =================
 
+    @PostMapping("/chats/{chatId}/messages")
+    public ResponseEntity<Map<String, Object>> sendMessage(
+            @PathVariable Long chatId,
+            @RequestBody Map<String, String> request) {
+
+        try {
+            String sender = request.get("sender");
+            String content = request.get("content");
+            String messageId = request.get("messageId");
+            
+            Map<String, Object> result = chatService.sendMessage(chatId, sender, content, messageId);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/chats/{chatId}/messages")
     public ResponseEntity<List<Message>> getMessages(
             @PathVariable Long chatId,
