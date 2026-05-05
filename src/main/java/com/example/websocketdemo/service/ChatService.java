@@ -1,6 +1,9 @@
 package com.example.websocketdemo.service;
 
-import com.example.websocketdemo.model.*;
+import com.example.websocketdemo.model.Chat;
+import com.example.websocketdemo.model.ChatParticipant;
+import com.example.websocketdemo.model.Message;
+import com.example.websocketdemo.model.User;
 import com.example.websocketdemo.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +33,7 @@ public class ChatService {
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;
 
-    private static final int PAGE_SIZE = 20;
+    private static final int PAGE_SIZE = 5;
 
     // ================= CHAT MANAGEMENT =================
 
@@ -230,6 +233,10 @@ public class ChatService {
 
     public void handleWebSocketDisconnect(String username) {
         userService.handleWebSocketDisconnect(username);
+    }
+
+    public List<User> getAllUsers() {
+        return userService.getAllUsers();
     }
 
 }

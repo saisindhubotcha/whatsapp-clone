@@ -1,6 +1,7 @@
 package com.example.websocketdemo.service;
 
 import com.example.websocketdemo.model.Message;
+import com.example.websocketdemo.repository.MessageRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -19,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 public class CacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final MessageRepository messageRepository;
 
     private static final String MESSAGE_KEY_PREFIX = "message:";
     private static final String CHAT_MESSAGES_KEY_PREFIX = "chat:";

@@ -45,6 +45,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> findByChatIdAndCreatedAtBeforeOrderByCreatedAtDesc(Long chatId, LocalDateTime before, Pageable pageable);
     
     Optional<Message> findByMessageId(String messageId);
-    
+
     Long countByChatId(Long chatId);
+
+    Optional<Message> findTopByChatIdOrderByCreatedAtDesc(Long chatId);
 }

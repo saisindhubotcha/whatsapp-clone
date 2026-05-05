@@ -129,10 +129,11 @@ public class ChatRestController {
     @GetMapping("/chats/{chatId}/messages")
     public ResponseEntity<List<Message>> getMessages(
             @PathVariable Long chatId,
-            @RequestParam String username) {
+            @RequestParam String username,
+            @RequestParam(required = false, defaultValue = "0") int page) {
 
         try {
-            return ResponseEntity.ok(chatService.getChatMessages(chatId, username));
+            return ResponseEntity.ok(chatService.getChatMessages(chatId, username, page));
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -170,6 +171,23 @@ public class ChatRestController {
     public ResponseEntity<List<Chat>> getChats(@PathVariable String username) {
         try {
             return ResponseEntity.ok(chatService.getUserChats(username));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<List<Map<String, Object>>> getAllUsers(@RequestParam(required = false) String exclude) {
+        try {
+            var users = chatService.getAllUsers().stream()
+                .map(user -> Map.<String, Object>of(
+                    "username", user.getUsername(),
+                    "isOnline", user.getIsOnline(),
+                    "lastSeen", user.getLastSeen()
+                ))
+                .filter(user -> exclude == null || !exclude.equals(user.get("username")))
+                .toList();
+            return ResponseEntity.ok(users);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }

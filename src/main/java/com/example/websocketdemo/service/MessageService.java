@@ -107,18 +107,6 @@ public class MessageService {
 
     }
 
-    public Optional<Message> getMessageByMessageId(String messageId) {
-
-            return messageRepository.findByMessageId(messageId);
-
-    }
-
-    public Long countMessagesInChat(Long chatId) {
-
-            return messageRepository.countByChatId(chatId);
-
-    }
-
     public List<Message> getRecentMessages(Long chatId, int limit) {
 
             return messageRepository.findByChatIdOrderByCreatedAtDesc(chatId, PageRequest.of(0, limit));
@@ -130,24 +118,4 @@ public class MessageService {
         return recentMessages.isEmpty() ? null : recentMessages.get(0).getMessageId();
     }
 
-    public Message editMessage(Long messageId, String newContent, String username) {
-        Optional<Message> messageOpt = getMessageById(messageId);
-        if (!messageOpt.isPresent()) {
-            throw new IllegalArgumentException("Message not found");
-        }
-
-        Message message = messageOpt.get();
-        if (!message.getSenderUsername().equals(username)) {
-            throw new IllegalArgumentException("Only sender can edit message");
-        }
-
-        message.setContent(newContent);
-        message.setEditedAt(LocalDateTime.now());
-        
-        Message updatedMessage = messageRepository.save(message);
-        
-        cacheService.updateMessageInCache(updatedMessage);
-        
-        return updatedMessage;
-    }
 }

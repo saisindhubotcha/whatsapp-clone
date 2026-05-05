@@ -30,6 +30,7 @@ var quickCreateChatForm = document.querySelector('#quickCreateChatForm');
 var quickChatName = document.querySelector('#quickChatName');
 var quickParticipants = document.querySelector('#quickParticipants');
 var emptyChatMessage = document.querySelector('#emptyChatMessage');
+var participantsSelect = document.querySelector('#participants');
 
 console.log('DOM elements initialized successfully');
 
@@ -259,31 +260,27 @@ async function selectChat(chatId) {
 // Update chat participants display
 function updateChatParticipants(participants) {
     if (!participants || participants.length === 0) {
-        chatParticipants.textContent = 'No participants';
+        chatParticipants.textContent = '';
         return;
     }
-    
-    const participantNames = participants.map(p => p.user ? p.user.username : 'Unknown').join(', ');
+
+    const participantNames = participants.map(p => p.userUsername || p.user?.username || 'Unknown').join(', ');
     chatParticipants.textContent = `Participants: ${participantNames}`;
 }
 
 // Create new chat
 async function createChat(event) {
     event.preventDefault();
-    
+
     const chatName = document.querySelector('#chatName').value.trim();
-    const participantsInput = document.querySelector('#participants').value.trim();
+    const participants = getSelectedParticipants(participantsSelect);
     const isGroupChat = document.querySelector('#isGroupChat').checked;
-    
-    const participants = participantsInput 
-        ? participantsInput.split(',').map(p => p.trim()).filter(p => p)
-        : [];
-    
+
     // Add current user to participants
     if (!participants.includes(username)) {
         participants.push(username);
     }
-    
+
     try {
         const response = await fetch('/chat/api/chats', {
             method: 'POST',
@@ -296,24 +293,24 @@ async function createChat(event) {
                 participants: participants
             })
         });
-        
+
         if (response.ok) {
             const result = await response.json();
             console.log('Chat created:', result);
-            
+
             // Show success message with missing participants info if any
             if (result.missingParticipants && result.missingParticipants.length > 0) {
                 alert(`Chat created successfully!\n\nNote: The following users were not found and not added: ${result.missingParticipants.join(', ')}`);
             } else {
                 alert('Chat created successfully!');
             }
-            
+
             // Reload user chats
             await loadUserChats();
-            
+
             // Close modal
             closeModal();
-            
+
             // Select the new chat
             if (result.chatId) {
                 await selectChat(result.chatId);
@@ -331,22 +328,18 @@ async function createChat(event) {
 // Quick create chat from sidebar (for empty state)
 async function quickCreateChat(event) {
     event.preventDefault();
-    
+
     const chatName = quickChatName.value.trim();
-    const participantsInput = quickParticipants.value.trim();
-    
-    const participants = participantsInput 
-        ? participantsInput.split(',').map(p => p.trim()).filter(p => p)
-        : [];
-    
+    const participants = getSelectedParticipants(quickParticipants);
+
     // Add current user to participants
     if (!participants.includes(username)) {
         participants.push(username);
     }
-    
+
     try {
         console.log('Creating chat with:', { name: chatName, createdBy: username, participants: participants });
-        
+
         const response = await fetch('/chat/api/chats', {
             method: 'POST',
             headers: {
@@ -358,25 +351,25 @@ async function quickCreateChat(event) {
                 participants: participants
             })
         });
-        
+
         console.log('Chat creation response status:', response.status);
         console.log('Chat creation response ok:', response.ok);
-        
+
         if (response.ok) {
             const result = await response.json();
             console.log('Chat created successfully:', result);
-            
+
             // Show success message with missing participants info if any
             if (result.missingParticipants && result.missingParticipants.length > 0) {
                 alert(`Chat created successfully!\n\nNote: The following users were not found and not added: ${result.missingParticipants.join(', ')}`);
             }
-            
+
             // Clear form
             quickCreateChatForm.reset();
-            
+
             // Reload user chats
             await loadUserChats();
-            
+
             // Select new chat
             if (result.chatId) {
                 await selectChat(result.chatId);
@@ -499,18 +492,22 @@ function onConnected() {
     console.log('Subscribing to /topic/public');
     stompClient.subscribe('/topic/public', onMessageReceived);
     console.log('Subscribed to /topic/public');
-    
+
     // Subscribe to user-specific topic for reconnect notifications
     console.log('Subscribing to /topic/user/' + username);
     stompClient.subscribe('/topic/user/' + username, onUserMessageReceived);
     console.log('Subscribed to /topic/user/' + username);
-    
+
     connectingElement.classList.add('hidden');
-    
+
     // Load user chats
     console.log('Loading user chats...');
     loadUserChats();
-    
+
+    // Load users for participant selection
+    console.log('Loading users for selection...');
+    loadUsers();
+
     // Send JOIN message
     const joinMessage = {
         type: 'JOIN',
@@ -712,11 +709,19 @@ async function loadChatHistory(chatId) {
         console.log('Fetching chat history from:', url);
         const response = await fetch(url);
         console.log('Chat history response status:', response.status);
-        
+
         if (response.ok) {
             const messages = await response.json();
             console.log('Loaded messages:', messages);
             console.log('Rendering', messages.length, 'messages');
+
+            // Sort messages by timestamp ascending (oldest first, newest last)
+            messages.sort((a, b) => {
+                const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+                const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+                return timeA - timeB;
+            });
+
             messages.forEach((message, index) => {
                 console.log(`Rendering message ${index + 1}:`, message);
                 renderMessage(message);
@@ -732,9 +737,59 @@ async function loadChatHistory(chatId) {
     }
 }
 
+// Load all users for participant selection
+async function loadUsers() {
+    if (!username) return;
+
+    try {
+        console.log('Loading users for participant selection...');
+        const response = await fetch(`/chat/api/users?exclude=${encodeURIComponent(username)}`);
+
+        if (response.ok) {
+            const users = await response.json();
+            console.log('Loaded users:', users);
+            populateUserSelects(users);
+        } else {
+            console.error('Failed to load users:', response.status);
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+// Populate user select dropdowns
+function populateUserSelects(users) {
+    const options = users.map(user => {
+        const onlineIndicator = user.isOnline ? ' (Online)' : '';
+        return `<option value="${user.username}" class="${user.isOnline ? 'online' : ''}">${user.username}${onlineIndicator}</option>`;
+    }).join('');
+
+    const defaultOption = '<option value="">-- Select users --</option>';
+
+    if (quickParticipants) {
+        quickParticipants.innerHTML = defaultOption + options;
+        console.log('Populated quick participants select');
+    }
+
+    if (participantsSelect) {
+        participantsSelect.innerHTML = defaultOption + options;
+        console.log('Populated modal participants select');
+    }
+}
+
+// Get selected participants from a multi-select element
+function getSelectedParticipants(selectElement) {
+    if (!selectElement) return [];
+    const selected = Array.from(selectElement.selectedOptions)
+        .map(option => option.value)
+        .filter(value => value);
+    return selected;
+}
+
 // Modal functions
 function openModal() {
     createChatModal.classList.remove('hidden');
+    loadUsers(); // Load users when modal opens
 }
 
 function closeModal() {
@@ -1015,12 +1070,6 @@ if (createChatForm) {
 if (quickCreateChatForm) {
     quickCreateChatForm.addEventListener('submit', quickCreateChat);
     console.log('Quick create chat form listener attached');
-    
-    // Add real-time participant preview
-    if (quickParticipants) {
-        quickParticipants.addEventListener('input', updateParticipantPreview);
-        console.log('Participant preview listener attached');
-    }
 } else {
     console.log('Quick create chat form not found (may be normal if not in empty state)');
 }
@@ -1030,13 +1079,6 @@ console.log('All event listeners setup completed');
 // Chat action event listeners
 if (document.querySelector('#leaveChatBtn')) {
     document.querySelector('#leaveChatBtn').addEventListener('click', leaveChat);
-}
-if (document.querySelector('#markReadBtn')) {
-    document.querySelector('#markReadBtn').addEventListener('click', () => {
-        if (currentChatId) {
-            markMessagesAsRead(currentChatId);
-        }
-    });
 }
 
 // Close modal when clicking outside

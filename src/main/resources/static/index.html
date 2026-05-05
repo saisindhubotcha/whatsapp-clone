@@ -58,8 +58,10 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="quickParticipants">Add Participants</label>
-                                    <input type="text" id="quickParticipants" placeholder="Enter usernames separated by commas">
-                                    <small class="form-help">Add other users by their usernames (e.g., user1, user2, user3)</small>
+                                    <select id="quickParticipants" multiple class="user-select">
+                                        <option value="">Loading users...</option>
+                                    </select>
+                                    <small class="form-help">Hold Ctrl/Cmd to select multiple users</small>
                                 </div>
                                 <div class="participant-preview" id="participantPreview"></div>
                                 <button type="submit" class="btn-primary">Create Chat</button>
@@ -87,7 +89,6 @@
                         <div class="chat-participants" id="chatParticipants"></div>
                     </div>
                     <div class="chat-actions">
-                        <button class="btn-icon" id="markReadBtn" title="Mark as read">read</button>
                         <button class="btn-icon" id="leaveChatBtn" title="Leave chat">leave</button>
                     </div>
                 </div>
@@ -127,8 +128,11 @@
                     <input type="text" id="chatName" placeholder="Enter chat name" required>
                 </div>
                 <div class="form-group">
-                    <label for="participants">Participants (comma-separated usernames)</label>
-                    <input type="text" id="participants" placeholder="user1, user2, user3">
+                    <label for="participants">Participants</label>
+                    <select id="participants" multiple class="user-select">
+                        <option value="">Loading users...</option>
+                    </select>
+                    <small class="form-help">Hold Ctrl/Cmd to select multiple users</small>
                 </div>
                 <div class="form-group">
                     <label>

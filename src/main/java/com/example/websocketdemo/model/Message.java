@@ -10,9 +10,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
+import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Table(name = "messages")
@@ -21,11 +20,14 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@IdClass(Message.MessageId.class)
 public class Message {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.TABLE, generator = "message_id_gen")
+    @TableGenerator(name = "message_id_gen", table = "id_generator", pkColumnName = "gen_name", valueColumnName = "gen_val", pkColumnValue = "message_id", allocationSize = 50)
     private Long id;
 
+    @Id
     @Column(name = "chat_id", nullable = false)
     private Long chatId;
     
@@ -87,16 +89,38 @@ public class Message {
     
     @Column(name = "message_id", unique = true)
     private String messageId;
-    
-    @ElementCollection
-    @CollectionTable(name = "message_read_by_users", joinColumns = @JoinColumn(name = "message_id"))
-    @Column(name = "username")
-    private Set<String> readByUsers = new HashSet<>();
-    
+
     public enum MessageType {
         CHAT,
         JOIN,
         LEAVE,
         SYSTEM
+    }
+
+    /**
+     * Composite primary key class for partitioned table support
+     * Required for MySQL HASH partitioning on chat_id
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MessageId implements Serializable {
+        private Long id;
+        private Long chatId;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MessageId messageId = (MessageId) o;
+            return java.util.Objects.equals(id, messageId.id) &&
+                   java.util.Objects.equals(chatId, messageId.chatId);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(id, chatId);
+        }
     }
 }

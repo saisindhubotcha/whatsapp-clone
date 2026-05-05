@@ -242,6 +242,46 @@ body:before {
     cursor: not-allowed;
 }
 
+/* User Select Dropdown Styles */
+.user-select {
+    width: 100%;
+    min-height: 100px;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+}
+
+.user-select:focus {
+    border-color: #007bff;
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.user-select option {
+    padding: 8px;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+
+.user-select option:hover {
+    background: #e3f2fd;
+}
+
+.user-select option:checked {
+    background: #007bff;
+    color: #fff;
+}
+
+.user-select option.online {
+    background: #d4edda;
+}
+
+.user-select option.online:checked {
+    background: #007bff;
+}
+
 /* Chat List */
 .chat-list {
     overflow-y: auto;
