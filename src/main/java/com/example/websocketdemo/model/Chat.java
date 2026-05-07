@@ -27,7 +27,10 @@ public class Chat {
     
     @Column(name = "created_by", nullable = false)
     private String createdBy;
-    
+
+    @Column(name = "seq_counter")
+    private Long seqCounter = 0L;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     

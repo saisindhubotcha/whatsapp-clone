@@ -49,4 +49,26 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     Long countByChatId(Long chatId);
 
     Optional<Message> findTopByChatIdOrderByCreatedAtDesc(Long chatId);
+
+    // ================= SEQUENCE-BASED PAGINATION QUERIES =================
+
+    // Get latest page of messages by seq_no (descending to get latest first)
+    List<Message> findByChatIdOrderBySeqNoDesc(Long chatId, Pageable pageable);
+
+    // Get messages before a specific seq_no (older messages)
+    List<Message> findByChatIdAndSeqNoLessThanOrderBySeqNoDesc(Long chatId, Long seqNo, Pageable pageable);
+
+    // Get messages after a specific seq_no (newer messages)
+    List<Message> findByChatIdAndSeqNoGreaterThanOrderBySeqNoAsc(Long chatId, Long seqNo, Pageable pageable);
+
+    // Get the highest seq_no for a conversation
+    @Query("SELECT MAX(m.seqNo) FROM Message m WHERE m.chatId = :chatId")
+    Long findMaxSeqNoByChatId(@Param("chatId") Long chatId);
+
+    // Get the lowest seq_no for a conversation
+    @Query("SELECT MIN(m.seqNo) FROM Message m WHERE m.chatId = :chatId")
+    Long findMinSeqNoByChatId(@Param("chatId") Long chatId);
+
+    // Get message by seq_no and chatId
+    Optional<Message> findByChatIdAndSeqNo(Long chatId, Long seqNo);
 }

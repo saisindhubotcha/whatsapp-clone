@@ -41,6 +41,11 @@ var currentChatId = null;
 var userChats = [];
 var unreadCounts = {};
 
+// Client cache for sequence-based pagination (per conversation)
+var messageCache = {}; // Key: chatId, Value: { messages: Map<seq_no, message>, oldest_seq, newest_seq, server_latest_seq, is_at_tail }
+var CACHE_EVICT_THRESHOLD = 350;
+var CACHE_TARGET_SIZE = 300;
+
 var colors = [
     '#2196F3', '#32c787', '#00BCD4', '#ff5652',
     '#ffc107', '#ff85af', '#FF9800', '#39bbb0'
@@ -580,7 +585,12 @@ function onMessageReceived(payload) {
     var message = JSON.parse(payload.body);
     console.log('Parsed message:', message);
     console.log('Current chat ID:', currentChatId);
-    
+
+    // Add message to cache if it has seq_no
+    if (message.seqNo !== undefined && message.chatId) {
+        addMessageToCache(message.chatId, message);
+    }
+
     // If message is for current chat, render it
     if (!message.chatId || message.chatId === currentChatId) {
         console.log('Rendering message for current chat');
@@ -600,7 +610,12 @@ function onChatMessageReceived(payload) {
     console.log('Chat-specific message received:', payload);
     var message = JSON.parse(payload.body);
     console.log('Parsed chat message:', message);
-    
+
+    // Add message to cache if it has seq_no
+    if (message.seqNo !== undefined && message.chatId) {
+        addMessageToCache(message.chatId, message);
+    }
+
     // Only render if message is for current chat
     if (message.chatId === currentChatId) {
         console.log('Rendering chat message for current chat');
@@ -705,8 +720,97 @@ function renderMessage(message) {
 async function loadChatHistory(chatId) {
     console.log('Loading chat history for chat ID:', chatId);
     try {
+        // Try new sequence-based API first
+        const url = `/chat/api/messages?conv=${chatId}&limit=50`;
+        console.log('Fetching chat history from new API:', url);
+        const response = await fetch(url);
+        console.log('Chat history response status:', response.status);
+
+        if (response.ok) {
+            const messages = await response.json();
+            console.log('Loaded messages from new API:', messages);
+
+            // Check if messages have seq_no (migration ran)
+            if (messages.length > 0 && messages[0].seqNo !== undefined) {
+                console.log('Using sequence-based pagination');
+                await loadChatHistoryWithSeq(chatId, messages);
+            } else {
+                console.log('Messages do not have seq_no, falling back to old API');
+                await loadChatHistoryOld(chatId);
+            }
+        } else {
+            console.log('New API failed, falling back to old API');
+            await loadChatHistoryOld(chatId);
+        }
+    } catch (error) {
+        console.error('Error loading chat history with new API, falling back:', error);
+        await loadChatHistoryOld(chatId);
+    }
+}
+
+async function loadChatHistoryWithSeq(chatId, messages) {
+    // Initialize cache for this conversation if not exists
+    if (!messageCache[chatId]) {
+        messageCache[chatId] = {
+            messages: new Map(),
+            oldest_seq: null,
+            newest_seq: null,
+            server_latest_seq: null,
+            is_at_tail: false
+        };
+    }
+
+    const cache = messageCache[chatId];
+
+    console.log('Rendering', messages.length, 'messages');
+
+    // Sort messages by seq_no ascending (oldest first, newest last)
+    messages.sort((a, b) => a.seqNo - b.seqNo);
+
+    // Populate cache
+    messages.forEach(message => {
+        cache.messages.set(message.seqNo, message);
+    });
+
+    // Update cache metadata
+    if (messages.length > 0) {
+        cache.oldest_seq = messages[0].seqNo;
+        cache.newest_seq = messages[messages.length - 1].seqNo;
+    }
+
+    // Fetch server latest seq
+    const latestSeqResponse = await fetch(`/chat/api/conv/${chatId}/latest_seq`);
+    if (latestSeqResponse.ok) {
+        const latestSeqData = await latestSeqResponse.json();
+        cache.server_latest_seq = latestSeqData.latest_seq;
+
+        // Set is_at_tail only if response shorter than limit AND newest_seq == server_latest_seq
+        if (messages.length < 50 && cache.newest_seq === cache.server_latest_seq) {
+            cache.is_at_tail = true;
+        }
+    }
+
+    // Assert contiguous range
+    assertContiguousRange(chatId);
+
+    // Render messages from cache
+    renderCachedMessages(chatId);
+
+    console.log('Chat history loaded and rendered with sequence-based pagination');
+    console.log('Cache state:', {
+        oldest_seq: cache.oldest_seq,
+        newest_seq: cache.newest_seq,
+        server_latest_seq: cache.server_latest_seq,
+        is_at_tail: cache.is_at_tail,
+        cache_size: cache.messages.size
+    });
+}
+
+async function loadChatHistoryOld(chatId) {
+    console.log('Loading chat history using old API');
+    try {
         const url = `/chat/api/chats/${chatId}/messages?username=${encodeURIComponent(username)}`;
-        console.log('Fetching chat history from:', url);
+        console.log('Fetching chat history from old API:', url);
         const response = await fetch(url);
         console.log('Chat history response status:', response.status);
 
@@ -726,7 +830,7 @@ async function loadChatHistory(chatId) {
                 console.log(`Rendering message ${index + 1}:`, message);
                 renderMessage(message);
             });
-            console.log('Chat history loaded and rendered');
+            console.log('Chat history loaded and rendered with old API');
         } else {
             console.error('Failed to load chat history:', response.status);
             const errorText = await response.text();
@@ -735,6 +839,257 @@ async function loadChatHistory(chatId) {
     } catch (error) {
         console.error('Error loading chat history:', error);
     }
+}
+
+// Load older messages (pagination - scroll up)
+async function loadOlderMessages(chatId) {
+    console.log('Loading older messages for chat ID:', chatId);
+    const cache = messageCache[chatId];
+    if (!cache || cache.oldest_seq === null) {
+        console.log('No cache or oldest_seq is null, cannot load older messages');
+        return;
+    }
+
+    try {
+        // GET /messages?conv=X&before_seq={oldest_seq}&limit=50
+        const url = `/chat/api/messages?conv=${chatId}&before_seq=${cache.oldest_seq}&limit=50`;
+        console.log('Fetching older messages from:', url);
+        const response = await fetch(url);
+
+        if (response.ok) {
+            const messages = await response.json();
+            console.log('Loaded older messages:', messages);
+
+            if (messages.length > 0) {
+                // Sort by seq_no ascending
+                messages.sort((a, b) => a.seqNo - b.seqNo);
+
+                // Add to cache (prepend)
+                messages.forEach(message => {
+                    cache.messages.set(message.seqNo, message);
+                });
+
+                // Update oldest_seq
+                cache.oldest_seq = messages[0].seqNo;
+
+                // If size > 350, evict from newest end down to 300, set is_at_tail = false
+                if (cache.messages.size > 350) {
+                    evictFromNewestEnd(chatId, 300);
+                    cache.is_at_tail = false;
+                }
+
+                // Assert contiguous range
+                assertContiguousRange(chatId);
+
+                // Re-render messages
+                renderCachedMessages(chatId);
+
+                console.log('Older messages loaded and rendered');
+            } else {
+                console.log('No older messages available');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading older messages:', error);
+    }
+}
+
+// Load newer messages (pagination - scroll down)
+async function loadNewerMessages(chatId) {
+    console.log('Loading newer messages for chat ID:', chatId);
+    const cache = messageCache[chatId];
+    if (!cache || cache.newest_seq === null) {
+        console.log('No cache or newest_seq is null, cannot load newer messages');
+        return;
+    }
+
+    // Only load if not at tail
+    if (cache.is_at_tail) {
+        console.log('Already at tail, cannot load newer messages');
+        return;
+    }
+
+    try {
+        // GET /messages?conv=X&after_seq={newest_seq}&limit=50
+        const url = `/chat/api/messages?conv=${chatId}&after_seq=${cache.newest_seq}&limit=50`;
+        console.log('Fetching newer messages from:', url);
+        const response = await fetch(url);
+
+        if (response.ok) {
+            const messages = await response.json();
+            console.log('Loaded newer messages:', messages);
+
+            if (messages.length > 0) {
+                // Sort by seq_no ascending
+                messages.sort((a, b) => a.seqNo - b.seqNo);
+
+                // Add to cache (append)
+                messages.forEach(message => {
+                    cache.messages.set(message.seqNo, message);
+                });
+
+                // Update newest_seq
+                cache.newest_seq = messages[messages.length - 1].seqNo;
+
+                // If response shorter than limit AND newest_seq == server_latest_seq, set is_at_tail = true
+                if (messages.length < 50 && cache.newest_seq === cache.server_latest_seq) {
+                    cache.is_at_tail = true;
+                }
+
+                // If size > 350, evict from oldest end down to 300
+                if (cache.messages.size > 350) {
+                    evictFromOldestEnd(chatId, 300);
+                }
+
+                // Assert contiguous range
+                assertContiguousRange(chatId);
+
+                // Re-render messages
+                renderCachedMessages(chatId);
+
+                console.log('Newer messages loaded and rendered');
+            } else {
+                console.log('No newer messages available');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading newer messages:', error);
+    }
+}
+
+// Evict from newest end (used when scrolling up)
+function evictFromNewestEnd(chatId, targetSize) {
+    const cache = messageCache[chatId];
+    if (!cache) return;
+
+    const cacheSize = cache.messages.size;
+    const messagesToRemove = cacheSize - targetSize;
+
+    if (messagesToRemove <= 0) return;
+
+    console.log('Evicting from newest end:', messagesToRemove, 'messages');
+
+    // Get all seq_nos sorted descending, remove from newest end
+    const sortedSeqs = Array.from(cache.messages.keys()).sort((a, b) => b - a);
+    for (let i = 0; i < messagesToRemove; i++) {
+        cache.messages.delete(sortedSeqs[i]);
+    }
+
+    // Update newest_seq
+    if (cache.messages.size > 0) {
+        const newHighestSeq = Math.max(...cache.messages.keys());
+        cache.newest_seq = newHighestSeq;
+    } else {
+        cache.newest_seq = null;
+    }
+
+    console.log('Evicted from newest end, new cache size:', cache.messages.size);
+}
+
+// Evict from oldest end (used when scrolling down)
+function evictFromOldestEnd(chatId, targetSize) {
+    const cache = messageCache[chatId];
+    if (!cache) return;
+
+    const cacheSize = cache.messages.size;
+    const messagesToRemove = cacheSize - targetSize;
+
+    if (messagesToRemove <= 0) return;
+
+    console.log('Evicting from oldest end:', messagesToRemove, 'messages');
+
+    // Get all seq_nos sorted ascending, remove from oldest end
+    const sortedSeqs = Array.from(cache.messages.keys()).sort((a, b) => a - b);
+    for (let i = 0; i < messagesToRemove; i++) {
+        cache.messages.delete(sortedSeqs[i]);
+    }
+
+    // Update oldest_seq
+    if (cache.messages.size > 0) {
+        const newLowestSeq = Math.min(...cache.messages.keys());
+        cache.oldest_seq = newLowestSeq;
+    } else {
+        cache.oldest_seq = null;
+    }
+
+    console.log('Evicted from oldest end, new cache size:', cache.messages.size);
+}
+
+// Assert contiguous range (debug builds)
+function assertContiguousRange(chatId) {
+    const cache = messageCache[chatId];
+    if (!cache || cache.messages.size < 2) return;
+
+    const sortedSeqs = Array.from(cache.messages.keys()).sort((a, b) => a - b);
+    for (let i = 0; i < sortedSeqs.length - 1; i++) {
+        if (sortedSeqs[i + 1] !== sortedSeqs[i] + 1) {
+            console.error('Cache invariant violated: gap detected at seq', sortedSeqs[i], 'to', sortedSeqs[i + 1]);
+            throw new Error(`Cache invariant violated: gap between seq ${sortedSeqs[i]} and ${sortedSeqs[i + 1]}`);
+        }
+    }
+    console.log('Cache contiguous range assertion passed');
+}
+
+// Render messages from cache (sorted by seq_no)
+function renderCachedMessages(chatId) {
+    const cache = messageCache[chatId];
+    if (!cache) return;
+
+    // Clear message area
+    messageArea.innerHTML = '';
+
+    // Get messages sorted by seq_no
+    const sortedMessages = Array.from(cache.messages.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(entry => entry[1]);
+
+    // Render each message
+    sortedMessages.forEach(message => {
+        renderMessage(message);
+    });
+
+    // Scroll to bottom
+    messageArea.scrollTop = messageArea.scrollHeight;
+}
+
+// Add incoming message to cache (real-time via WebSocket)
+function addMessageToCache(chatId, message) {
+    if (!messageCache[chatId]) {
+        messageCache[chatId] = {
+            messages: new Map(),
+            oldest_seq: null,
+            newest_seq: null,
+            server_latest_seq: null,
+            is_at_tail: false
+        };
+    }
+
+    const cache = messageCache[chatId];
+
+    // Add message to cache (seq_no is server-assigned only)
+    cache.messages.set(message.seqNo, message);
+
+    // Update newest_seq
+    if (cache.newest_seq === null || message.seqNo > cache.newest_seq) {
+        cache.newest_seq = message.seqNo;
+    }
+
+    // Update oldest_seq if this is the first message
+    if (cache.oldest_seq === null) {
+        cache.oldest_seq = message.seqNo;
+    }
+
+    // Update server_latest_seq and set is_at_tail = true (we're at latest)
+    cache.server_latest_seq = message.seqNo;
+    cache.is_at_tail = true;
+
+    // If size > 350, evict from oldest end down to 300
+    if (cache.messages.size > 350) {
+        evictFromOldestEnd(chatId, 300);
+    }
+
+    // Assert contiguous range
+    assertContiguousRange(chatId);
 }
 
 // Load all users for participant selection

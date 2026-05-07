@@ -1,6 +1,8 @@
 package com.example.websocketdemo.service;
 
+import com.example.websocketdemo.model.Chat;
 import com.example.websocketdemo.model.Message;
+import com.example.websocketdemo.repository.ChatRepository;
 import com.example.websocketdemo.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,7 @@ public class MessageService {
 
     private final MessageRepository messageRepository;
     private final CacheService cacheService;
+    private final ChatRepository chatRepository;
 
     @Value("${sharding.enabled:false}")
     private boolean shardingEnabled;
@@ -42,8 +45,22 @@ public class MessageService {
             return Map.of("success", true, "duplicate", true);
         }
 
+        // Transactional seq_no assignment
+        // UPDATE conversations SET seq_counter = seq_counter + 1 WHERE id = :conv_id RETURNING seq_counter
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
+        
+        Long newSeqNo;
+        if (chat.getSeqCounter() == null) {
+            chat.setSeqCounter(0L);
+        }
+        newSeqNo = chat.getSeqCounter() + 1;
+        chat.setSeqCounter(newSeqNo);
+        chatRepository.save(chat);
+
         Message message = Message.builder()
                 .chatId(chatId)
+                .seqNo(newSeqNo)
                 .senderUsername(sender)
                 .content(content)
                 .type(Message.MessageType.CHAT)
@@ -58,9 +75,22 @@ public class MessageService {
 
     public Message createSystemMessage(Long chatId, String sender, String content, Message.MessageType type) {
         String messageId = type.name().toLowerCase() + "_" + System.currentTimeMillis() + "_" + sender;
-        
+
+        // Transactional seq_no assignment
+        Chat chat = chatRepository.findById(chatId)
+                .orElseThrow(() -> new IllegalArgumentException("Chat not found"));
+
+        Long newSeqNo;
+        if (chat.getSeqCounter() == null) {
+            chat.setSeqCounter(0L);
+        }
+        newSeqNo = chat.getSeqCounter() + 1;
+        chat.setSeqCounter(newSeqNo);
+        chatRepository.save(chat);
+
         Message message = Message.builder()
                 .chatId(chatId)
+                .seqNo(newSeqNo)
                 .senderUsername(sender)
                 .content(content)
                 .type(type)
@@ -116,6 +146,27 @@ public class MessageService {
     public String getLastMessageId(Long chatId) {
         List<Message> recentMessages = getRecentMessages(chatId, 1);
         return recentMessages.isEmpty() ? null : recentMessages.get(0).getMessageId();
+    }
+
+    // ================= SEQUENCE-BASED PAGINATION METHODS =================
+
+    public List<Message> getMessagesBySeq(Long chatId, Integer limit) {
+        int pageSize = (limit != null && limit > 0) ? limit : 50;
+        return messageRepository.findByChatIdOrderBySeqNoDesc(chatId, PageRequest.of(0, pageSize));
+    }
+
+    public List<Message> getMessagesBeforeSeq(Long chatId, Long beforeSeq, Integer limit) {
+        int pageSize = (limit != null && limit > 0) ? limit : 50;
+        return messageRepository.findByChatIdAndSeqNoLessThanOrderBySeqNoDesc(chatId, beforeSeq, PageRequest.of(0, pageSize));
+    }
+
+    public List<Message> getMessagesAfterSeq(Long chatId, Long afterSeq, Integer limit) {
+        int pageSize = (limit != null && limit > 0) ? limit : 50;
+        return messageRepository.findByChatIdAndSeqNoGreaterThanOrderBySeqNoAsc(chatId, afterSeq, PageRequest.of(0, pageSize));
+    }
+
+    public Long getLatestSeqNo(Long chatId) {
+        return messageRepository.findMaxSeqNoByChatId(chatId);
     }
 
 }

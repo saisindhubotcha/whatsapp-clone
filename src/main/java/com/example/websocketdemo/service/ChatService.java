@@ -45,8 +45,10 @@ public class ChatService {
         List<String> valid = new ArrayList<>();
         valid.add(createdBy);
 
+        // Add all participants without checking if they exist
+        // Users will be auto-created when they first log in
         for (String u : participants) {
-            if (!u.equals(createdBy) && userService.userExists(u)) {
+            if (!u.equals(createdBy) && !valid.contains(u)) {
                 valid.add(u);
             }
         }
@@ -237,6 +239,24 @@ public class ChatService {
 
     public List<User> getAllUsers() {
         return userService.getAllUsers();
+    }
+
+    // ================= SEQUENCE-BASED PAGINATION METHODS =================
+
+    public List<Message> getMessagesBySeq(Long chatId, Integer limit) {
+        return messageService.getMessagesBySeq(chatId, limit);
+    }
+
+    public List<Message> getMessagesBeforeSeq(Long chatId, Long beforeSeq, Integer limit) {
+        return messageService.getMessagesBeforeSeq(chatId, beforeSeq, limit);
+    }
+
+    public List<Message> getMessagesAfterSeq(Long chatId, Long afterSeq, Integer limit) {
+        return messageService.getMessagesAfterSeq(chatId, afterSeq, limit);
+    }
+
+    public Long getLatestSeqNo(Long chatId) {
+        return messageService.getLatestSeqNo(chatId);
     }
 
 }

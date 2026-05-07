@@ -192,4 +192,38 @@ public class ChatRestController {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    // ================= SEQUENCE-BASED PAGINATION ENDPOINTS =================
+
+    @GetMapping("/messages")
+    public ResponseEntity<List<Message>> getMessagesBySeq(
+            @RequestParam Long conv,
+            @RequestParam(required = false) Long before_seq,
+            @RequestParam(required = false) Long after_seq,
+            @RequestParam(required = false, defaultValue = "50") Integer limit) {
+
+        try {
+            List<Message> messages;
+            if (before_seq != null) {
+                messages = chatService.getMessagesBeforeSeq(conv, before_seq, limit);
+            } else if (after_seq != null) {
+                messages = chatService.getMessagesAfterSeq(conv, after_seq, limit);
+            } else {
+                messages = chatService.getMessagesBySeq(conv, limit);
+            }
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/conv/{convId}/latest_seq")
+    public ResponseEntity<Map<String, Object>> getLatestSeq(@PathVariable Long convId) {
+        try {
+            Long latestSeq = chatService.getLatestSeqNo(convId);
+            return ResponseEntity.ok(Map.of("latest_seq", latestSeq != null ? latestSeq : 0));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 }

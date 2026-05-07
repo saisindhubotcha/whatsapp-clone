@@ -30,7 +30,10 @@ public class Message {
     @Id
     @Column(name = "chat_id", nullable = false)
     private Long chatId;
-    
+
+    @Column(name = "seq_no", nullable = false)
+    private Long seqNo;
+
     @Column(name = "sender_username", nullable = false)
     private String senderUsername;
     
