@@ -53,8 +53,16 @@ public class ChatService {
             }
         }
 
+        // Auto-generate chat name for direct chats (1-on-1)
+        String finalChatName = chatName;
+        if (valid.size() == 2) {
+            // Direct chat: use "fromName - toName" format
+            String otherUser = valid.get(0).equals(createdBy) ? valid.get(1) : valid.get(0);
+            finalChatName = createdBy + " - " + otherUser;
+        }
+
         Chat chat = Chat.builder()
-                .name(chatName)
+                .name(finalChatName)
                 .createdBy(createdBy)
                 .createdAt(LocalDateTime.now())
                 .isGroupChat(valid.size() > 2)

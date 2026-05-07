@@ -277,13 +277,24 @@ function updateChatParticipants(participants) {
 async function createChat(event) {
     event.preventDefault();
 
-    const chatName = document.querySelector('#chatName').value.trim();
+    const chatNameInput = document.querySelector('#chatName');
     const participants = getSelectedParticipants(participantsSelect);
-    const isGroupChat = document.querySelector('#isGroupChat').checked;
 
     // Add current user to participants
     if (!participants.includes(username)) {
         participants.push(username);
+    }
+
+    // Determine if it's a direct chat (1-on-1)
+    const isDirectChat = participants.length === 2;
+
+    // For direct chats, don't send a chat name - backend will auto-generate "fromName - toName"
+    const chatName = isDirectChat ? '' : chatNameInput.value.trim();
+
+    // For group chats, require a chat name
+    if (!isDirectChat && !chatName) {
+        alert('Please enter a chat name for group chats');
+        return;
     }
 
     try {
@@ -334,12 +345,24 @@ async function createChat(event) {
 async function quickCreateChat(event) {
     event.preventDefault();
 
-    const chatName = quickChatName.value.trim();
+    const chatNameInput = quickChatName;
     const participants = getSelectedParticipants(quickParticipants);
 
     // Add current user to participants
     if (!participants.includes(username)) {
         participants.push(username);
+    }
+
+    // Determine if it's a direct chat (1-on-1)
+    const isDirectChat = participants.length === 2;
+
+    // For direct chats, don't send a chat name - backend will auto-generate "fromName - toName"
+    const chatName = isDirectChat ? '' : chatNameInput.value.trim();
+
+    // For group chats, require a chat name
+    if (!isDirectChat && !chatName) {
+        alert('Please enter a chat name for group chats');
+        return;
     }
 
     try {
