@@ -4,15 +4,14 @@ A modern real-time chat application built with Spring Boot and WebSocket.
 
 ### Screenshots
 
-**Login Page**
-![Login Page](https://drive.google.com/file/d/14T1xMXijxn3aGaO0LaWsvnjsBGCHdn4x/view?usp=sharing)
+**Active Conversation**
+![Active Chat](https://drive.google.com/uc?export=view&id=1o8yEYOOT3QigM10Wn2AYCxKtXR-Uj5oj)
 
 **Chat Interface - Welcome Screen**
-![New Chat](https://drive.google.com/file/d/1VbHCP1ok-6hzJ3F8Pr54IKMUf2nTiaw7/view?usp=drive_link)
+![New Chat](https://drive.google.com/uc?export=view&id=1VbHCP1ok-6hzJ3F8Pr54IKMUf2nTiaw7)
 
-**Active Conversation**
-![Active Chat](https://drive.google.com/file/d/1dVVlggLrNR80kv7XoB_bt__WVvwtPwOl/view?usp=sharing)
-
+**Login Page**
+![Login to Chat](https://drive.google.com/uc?export=view&id=1dVVlggLrNR80kv7XoB_bt__WVvwtPwOl)
 ## Requirements
 
 1. Java - 11
