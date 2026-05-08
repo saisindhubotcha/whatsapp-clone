@@ -41,6 +41,11 @@ var currentChatId = null;
 var userChats = [];
 var unreadCounts = {};
 
+// Scroll pagination state
+var isLoadingOlder = false;
+var isLoadingNewer = false;
+var scrollThreshold = 100; // pixels from edge to trigger load
+
 // Client cache for sequence-based pagination (per conversation)
 var messageCache = {}; // Key: chatId, Value: { messages: Map<seq_no, message>, oldest_seq, newest_seq, server_latest_seq, is_at_tail }
 var CACHE_EVICT_THRESHOLD = 350;
@@ -585,18 +590,18 @@ async function sendMessage(event) {
 
     if(messageContent && currentChatId) {
         // Use HTTP API as primary method
-        await sendMessageViaHTTP(currentChatId, username, messageContent, generateMessageId(currentChatId, username, messageContent));
+        await sendMessageViaHTTP(currentChatId, username, messageContent);
     } else {
         console.log('Cannot send message - missing requirements');
         if (!messageContent) console.log('No message content');
         if (!stompClient) console.log('No WebSocket connection');
         if (!currentChatId) console.log('No current chat selected');
-        
+
         if (!currentChatId) {
             alert('Please select a chat first');
         } else if (!stompClient || !stompClient.connected) {
             console.log('WebSocket not available, using HTTP API');
-            await sendMessageViaHTTP(currentChatId, username, messageContent, generateMessageId(currentChatId, username, messageContent));
+            await sendMessageViaHTTP(currentChatId, username, messageContent);
         }
     }
     console.log('sendMessage function finished');
@@ -864,6 +869,67 @@ async function loadChatHistoryOld(chatId) {
     }
 }
 
+// Handle scroll events for pagination
+function handleMessageAreaScroll() {
+    if (!currentChatId || !messageArea) return;
+
+    const scrollTop = messageArea.scrollTop;
+    const scrollHeight = messageArea.scrollHeight;
+    const clientHeight = messageArea.clientHeight;
+    const scrollBottom = scrollHeight - scrollTop - clientHeight;
+
+    // Load older messages when scrolling near top
+    if (scrollTop < scrollThreshold && !isLoadingOlder) {
+        const cache = messageCache[currentChatId];
+        if (cache && cache.oldest_seq !== null) {
+            isLoadingOlder = true;
+            showLoadingIndicator('older');
+            loadOlderMessages(currentChatId).finally(() => {
+                isLoadingOlder = false;
+                hideLoadingIndicator('older');
+            });
+        }
+    }
+
+    // Load newer messages when scrolling near bottom (only if not at tail)
+    if (scrollBottom < scrollThreshold && !isLoadingNewer) {
+        const cache = messageCache[currentChatId];
+        if (cache && !cache.is_at_tail && cache.newest_seq !== null) {
+            isLoadingNewer = true;
+            showLoadingIndicator('newer');
+            loadNewerMessages(currentChatId).finally(() => {
+                isLoadingNewer = false;
+                hideLoadingIndicator('newer');
+            });
+        }
+    }
+}
+
+// Show loading indicator at top or bottom of message area
+function showLoadingIndicator(position) {
+    const existingIndicator = document.querySelector(`#loading-indicator-${position}`);
+    if (existingIndicator) return;
+
+    const indicator = document.createElement('li');
+    indicator.id = `loading-indicator-${position}`;
+    indicator.className = 'loading-indicator';
+    indicator.innerHTML = '<div class="loading-spinner"></div><span>Loading messages...</span>';
+
+    if (position === 'older') {
+        messageArea.insertBefore(indicator, messageArea.firstChild);
+    } else {
+        messageArea.appendChild(indicator);
+    }
+}
+
+// Hide loading indicator
+function hideLoadingIndicator(position) {
+    const indicator = document.querySelector(`#loading-indicator-${position}`);
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
 // Load older messages (pagination - scroll up)
 async function loadOlderMessages(chatId) {
     console.log('Loading older messages for chat ID:', chatId);
@@ -884,6 +950,10 @@ async function loadOlderMessages(chatId) {
             console.log('Loaded older messages:', messages);
 
             if (messages.length > 0) {
+                // Save scroll position before adding messages
+                const oldScrollHeight = messageArea.scrollHeight;
+                const oldScrollTop = messageArea.scrollTop;
+
                 // Sort by seq_no ascending
                 messages.sort((a, b) => a.seqNo - b.seqNo);
 
@@ -906,6 +976,11 @@ async function loadOlderMessages(chatId) {
 
                 // Re-render messages
                 renderCachedMessages(chatId);
+
+                // Restore scroll position to prevent jumping
+                const newScrollHeight = messageArea.scrollHeight;
+                const heightDifference = newScrollHeight - oldScrollHeight;
+                messageArea.scrollTop = oldScrollTop + heightDifference;
 
                 console.log('Older messages loaded and rendered');
             } else {
@@ -1210,171 +1285,6 @@ function updateParticipantPreview() {
 }
 
 // Utility functions
-function generateMessageId(chatId, sender, content) {
-    // Create deterministic messageId based on message content for idempotency
-    const messageData = `${chatId}_${sender}_${content}`;
-    
-    // MD5 hash implementation
-    function md5(string) {
-        function add32(a, b) {
-            return (a + b) & 0xFFFFFFFF;
-        }
-        
-        function mm(a, b, c, d, x, s, t) {
-            return add32(rol(add32(add32(b, c), x), s), t);
-        }
-        
-        function rol(n, c) {
-            return (n << c) | (n >>> (32 - c));
-        }
-        
-        function cmn(q, a, b, x, s, t) {
-            a = add32(add32(a, q), add32(x, t));
-            return add32(rol(a, s), b);
-        }
-        
-        function ff(a, b, c, d, x, s, t) {
-            return cmn((b & c) | ((~b) & d), a, b, x, s, t);
-        }
-        
-        function gg(a, b, c, d, x, s, t) {
-            return cmn((b & d) | (c & (~d)), a, b, x, s, t);
-        }
-        
-        function hh(a, b, c, d, x, s, t) {
-            return cmn(b ^ c ^ d, a, b, x, s, t);
-        }
-        
-        function ii(a, b, c, d, x, s, t) {
-            return cmn(c ^ (b | (~d)), a, b, x, s, t);
-        }
-        
-        function md5cycle(x, k) {
-            let a = x[0], b = x[1], c = x[2], d = x[3];
-            
-            a = ff(a, b, c, d, k[0], 7, -680876936);
-            d = ff(d, a, b, c, k[1], 12, -389564586);
-            c = ff(c, d, a, b, k[2], 17, 606105819);
-            b = ff(b, c, d, a, k[3], 22, -1044525330);
-            a = ff(a, b, c, d, k[4], 7, -176418897);
-            d = ff(d, a, b, c, k[5], 12, 1200080426);
-            c = ff(c, d, a, b, k[6], 17, -1473231341);
-            b = ff(b, c, d, a, k[7], 22, -45705983);
-            a = ff(a, b, c, d, k[8], 7, 1770035416);
-            d = ff(d, a, b, c, k[9], 12, -1958414417);
-            c = ff(c, d, a, b, k[10], 17, -42063);
-            b = ff(b, c, d, a, k[11], 22, -1990404162);
-            a = ff(a, b, c, d, k[12], 7, 1804603682);
-            d = ff(d, a, b, c, k[13], 12, -40341101);
-            c = ff(c, d, a, b, k[14], 17, -1502002290);
-            b = ff(b, c, d, a, k[15], 22, 1236535329);
-            
-            a = gg(a, b, c, d, k[1], 5, -165796510);
-            d = gg(d, a, b, c, k[6], 9, -1069501632);
-            c = gg(c, d, a, b, k[11], 14, 643717713);
-            b = gg(b, c, d, a, k[0], 20, -373897302);
-            a = gg(a, b, c, d, k[5], 5, -701558691);
-            d = gg(d, a, b, c, k[10], 9, 38016083);
-            c = gg(c, d, a, b, k[15], 14, -660478335);
-            b = gg(b, c, d, a, k[4], 20, -405537848);
-            a = gg(a, b, c, d, k[9], 5, 568446438);
-            d = gg(d, a, b, c, k[14], 9, -1019803690);
-            c = gg(c, d, a, b, k[3], 14, -187363961);
-            b = gg(b, c, d, a, k[8], 20, 1163531501);
-            a = gg(a, b, c, d, k[13], 5, -1444681467);
-            d = gg(d, a, b, c, k[2], 9, -51403784);
-            c = gg(c, d, a, b, k[7], 14, 1735328473);
-            b = gg(b, c, d, a, k[12], 20, -1926607734);
-            
-            a = hh(a, b, c, d, k[5], 4, -378558);
-            d = hh(d, a, b, c, k[8], 11, -2022574463);
-            c = hh(c, d, a, b, k[11], 16, 1839030562);
-            b = hh(b, c, d, a, k[14], 23, -35309556);
-            a = hh(a, b, c, d, k[1], 4, -1530992060);
-            d = hh(d, a, b, c, k[4], 11, 1272893353);
-            c = hh(c, d, a, b, k[7], 16, -155497632);
-            b = hh(b, c, d, a, k[10], 23, -1094730640);
-            a = hh(a, b, c, d, k[13], 4, 681279174);
-            d = hh(d, a, b, c, k[0], 11, -358537222);
-            c = hh(c, d, a, b, k[3], 16, -722521979);
-            b = hh(b, c, d, a, k[6], 23, 76029189);
-            a = hh(a, b, c, d, k[9], 4, -640364487);
-            d = hh(d, a, b, c, k[12], 11, -421815835);
-            c = hh(c, d, a, b, k[15], 16, 530742520);
-            b = hh(b, c, d, a, k[2], 23, -995338651);
-            
-            a = ii(a, b, c, d, k[0], 6, -198630844);
-            d = ii(d, a, b, c, k[7], 10, 1126891415);
-            c = ii(c, d, a, b, k[14], 15, -1416354905);
-            b = ii(b, c, d, a, k[5], 21, -57434055);
-            a = ii(a, b, c, d, k[12], 6, 1700485571);
-            d = ii(d, a, b, c, k[3], 10, -1894986606);
-            c = ii(c, d, a, b, k[10], 15, -1051523);
-            b = ii(b, c, d, a, k[1], 21, -2054922799);
-            a = ii(a, b, c, d, k[8], 6, 1873313359);
-            d = ii(d, a, b, c, k[15], 10, -30611744);
-            c = ii(c, d, a, b, k[6], 15, -1560198380);
-            b = ii(b, c, d, a, k[13], 21, 1309151649);
-            a = ii(a, b, c, d, k[4], 6, -145523070);
-            d = ii(d, a, b, c, k[11], 10, -1120210379);
-            c = ii(c, d, a, b, k[2], 15, 718787259);
-            b = ii(b, c, d, a, k[9], 21, -343485551);
-            
-            x[0] = add32(a, x[0]);
-            x[1] = add32(b, x[1]);
-            x[2] = add32(c, x[2]);
-            x[3] = add32(d, x[3]);
-        }
-        
-        function md51(s) {
-            let n = s.length;
-            const state = [1732584193, -271733879, -1732584194, 271733878];
-            let i;
-            for (i = 64; i <= s.length; i += 64) {
-                md5cycle(state, md5blk(s.substring(i - 64, i)));
-            }
-            s = s.substring(i - 64);
-            const tail = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-            for (i = 0; i < s.length; i++) {
-                tail[i >> 2] |= s.charCodeAt(i) << ((i % 4) * 8);
-            }
-            tail[i >> 2] |= 0x80 << ((i % 4) * 8);
-            if (i > 55) {
-                md5cycle(state, tail);
-                for (i = 0; i < 16; i++) tail[i] = 0;
-            }
-            tail[14] = n * 8;
-            md5cycle(state, tail);
-            return state;
-        }
-        
-        function md5blk(s) {
-            const md5blks = [];
-            for (let i = 0; i < 64; i += 4) {
-                md5blks[i >> 2] = s.charCodeAt(i) + (s.charCodeAt(i + 1) << 8) + (s.charCodeAt(i + 2) << 16) + (s.charCodeAt(i + 3) << 24);
-            }
-            return md5blks;
-        }
-        
-        function rhex(n) {
-            let s = '';
-            for (let i = 0; i < 4; i++) {
-                s += hexchr((n >> (i * 8)) & 0xFF);
-            }
-            return s;
-        }
-        
-        function hexchr(i) {
-            return '0123456789abcdef'.charAt(i);
-        }
-        
-        const x = md51(string);
-        return rhex(x[0]) + rhex(x[1]) + rhex(x[2]) + rhex(x[3]);
-    }
-    
-    return 'msg_' + md5(messageData);
-}
-
 function getAvatarColor(messageSender) {
     var hash = 0;
     for (var i = 0; i < messageSender.length; i++) {
@@ -1468,13 +1378,19 @@ if (createChatModal) {
     });
 }
 
+// Scroll pagination listener for message area
+if (messageArea) {
+    messageArea.addEventListener('scroll', handleMessageAreaScroll);
+    console.log('Scroll pagination listener attached to message area');
+}
+
 console.log('All event listeners setup completed successfully!');
 
 // HTTP API fallback for sending messages
-async function sendMessageViaHTTP(chatId, sender, content, messageId) {
+async function sendMessageViaHTTP(chatId, sender, content) {
     try {
         console.log('Sending message via HTTP API...');
-        
+
         const response = await fetch(`/chat/api/chats/${chatId}/messages`, {
             method: 'POST',
             headers: {
@@ -1482,8 +1398,7 @@ async function sendMessageViaHTTP(chatId, sender, content, messageId) {
             },
             body: JSON.stringify({
                 sender: sender,
-                content: content,
-                messageId: messageId
+                content: content
             })
         });
         

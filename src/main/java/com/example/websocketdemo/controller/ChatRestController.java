@@ -116,9 +116,8 @@ public class ChatRestController {
         try {
             String sender = request.get("sender");
             String content = request.get("content");
-            String messageId = request.get("messageId");
-            
-            Map<String, Object> result = chatService.sendMessage(chatId, sender, content, messageId);
+
+            Map<String, Object> result = chatService.sendMessage(chatId, sender, content, null);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.badRequest()

@@ -21,7 +21,7 @@ public class WebSocketMessageController {
         try {
             Long chatId = chatMessage.getChatId();
             if (chatId != null) {
-                chatService.sendMessage(chatId, chatMessage.getSender(), chatMessage.getContent(), chatMessage.getMessageId());
+                chatService.sendMessage(chatId, chatMessage.getSender(), chatMessage.getContent(), null);
             } else {
                 System.err.println("Chat ID is null in message: " + chatMessage);
             }

@@ -1176,3 +1176,34 @@ button.accent {
         font-size: 1.1em;
     }
 }
+
+/* Loading Indicator for Scroll Pagination */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    color: #888;
+    font-size: 13px;
+    font-style: italic;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 12px;
+    margin: 12px 24px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(102, 126, 234, 0.2);
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
